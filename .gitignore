@@ -1,0 +1,10 @@
+/__pycache__/
+/.vector_cache/
+/checkpoint/
+/eval/
+/fasta_data/
+/figures/
+/samples/
+/samples_fbgan/
+data/*.tsv
+data/*.vec
