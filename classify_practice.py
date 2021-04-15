@@ -36,7 +36,7 @@ use_cuda  = True if torch.cuda.is_available() else False
 Tensor = torch.cuda.FloatTensor if use_cuda else torch.FloatTensor
 
 # def prepare_data_model():
-dataset, seq_nparr, label_nparr, max_len, amino_num, a_list, motif_list = load_data(classification, opt.motif, neg=True) #numpy.ndarray
+dataset, seq_nparr, label_nparr, max_len, amino_num, a_list, motif_list, seq_arr = load_data(classification, opt.motif, neg=True) #numpy.ndarray
 dataloader = torch.utils.data.DataLoader(dataset, batch_size=opt.batch, shuffle=True, drop_last=True)
 print(dataloader, seq_nparr, seq_nparr.shape, label_nparr, label_nparr.shape, max_len, amino_num)
 

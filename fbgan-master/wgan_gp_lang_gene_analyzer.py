@@ -19,21 +19,17 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.autograd as autograd
 from torch.autograd import Variable
+
 from sklearn.preprocessing import OneHotEncoder
 import os, math, glob, argparse
 from utils.torch_utils import *
 from utils.utils import *
-from avp_predictor_pytorch import *
+from amp_predictor_pytorch import *
 import matplotlib.pyplot as plt
 import utils.language_helpers
 plt.switch_backend('agg')
 import numpy as np
 from models import *
-from selenium import webdriver
-
-#driver = webdriver.Chrome()
-#driver.get('http://codes.bio/meta-iavp/')
-#search_box = driver.find_element_by_id("Sequence")
 
 class WGAN_LangGP():
     def __init__(self, batch_size=64, lr=0.0001, num_epochs=150, seq_len = 156, data_dir='./data/dna_uniprot_under_50_reviewed.fasta', \
@@ -60,27 +56,25 @@ class WGAN_LangGP():
         self.D = Discriminator_lang(len(self.charmap), self.seq_len, self.batch_size, self.hidden)
         if self.use_cuda:
             self.G.cuda()
-            self.D.cuda() 
+            self.D.cuda()
         print(self.G)
         print(self.D)
         self.G_optimizer = optim.Adam(self.G.parameters(), lr=self.lr, betas=(0.5, 0.9))
         self.D_optimizer = optim.Adam(self.D.parameters(), lr=self.lr, betas=(0.5, 0.9))
-        self.analyzer = AVPClassifier() #from PYTORCH
+        self.analyzer = ACPClassifier() #from PYTORCH
         val_loss, val_acc = self.analyzer.evaluate_model()
         print("Val Acc:{}".format(val_acc))
 
-    def load_data(self, datadir, max_examples=1e6):#taken data from './data/dna_uniprot_under_50_reviewed.fasta'
+    def load_data(self, datadir, max_examples=1e6):
         self.data, self.charmap, self.inv_charmap = utils.language_helpers.load_dataset(
             max_length=self.seq_len,
             max_n_examples=max_examples,
             data_dir=datadir
-        ) #self.data is the list of all data
-        #self.charmap:{'P': 0, 'A': 1, 'G': 2, 'T': 3, 'C': 4}, self.inv_charmap:['P', 'A', 'G', 'T', 'C'], len(self.data))==2000(もとは3655このデータ)
-        #print(self.data)
+        )
         self.labels = np.zeros(len(self.data)) #this marks at which epoch this data was added
 
     def remove_old_indices(self, numToAdd):
-        toRemove = np.argsort(self.labels)[:numToAdd] #toRemove is the list of index that is to be removed
+        toRemove = np.argsort(self.labels)[:numToAdd]
         self.data = [d for i,d in enumerate(self.data) if i not in toRemove]
         self.labels = np.delete(self.labels, toRemove)
 
@@ -94,7 +88,7 @@ class WGAN_LangGP():
         '''
         if len(directory) == 0:
             directory = self.checkpoint_dir
-        list_G = glob.glob(directory + "G*.pth") #list of the files' names 
+        list_G = glob.glob(directory + "G*.pth")
         list_D = glob.glob(directory + "D*.pth")
         if len(list_G) == 0:
             print("[*] Checkpoint not found! Starting from scratch.")
@@ -108,8 +102,8 @@ class WGAN_LangGP():
             D_file = "D_weights_{}.pth".format(iteration)
         epoch_found = int( (G_file.split('_')[-1]).split('.')[0])
         print("[*] Checkpoint {} found at {}!".format(epoch_found, directory))
-        self.G.load_state_dict(torch.load(G_file,map_location='cpu'))
-        self.D.load_state_dict(torch.load(D_file,map_location='cpu'))
+        self.G.load_state_dict(torch.load(G_file))
+        self.D.load_state_dict(torch.load(D_file))
         return epoch_found
 
     def calc_gradient_penalty(self, real_data, fake_data):
@@ -138,10 +132,10 @@ class WGAN_LangGP():
         d_fake_losses, d_real_losses, grad_penalties = [],[],[]
         G_losses, D_losses, W_dist = [],[],[]
 
-        # one = torch.FloatTensor([1]):this doesn't work for CPU
-        one = torch.tensor(1, dtype=torch.float)
+        one = torch.FloatTensor([1])
         one = one.cuda() if self.use_cuda else one
-        one_neg = one * -1 #tensor([-1.])
+        one_neg = one * -1
+
         table = np.arange(len(self.charmap)).reshape(-1, 1)
         one_hot = OneHotEncoder()
         one_hot.fit(table)
@@ -150,27 +144,15 @@ class WGAN_LangGP():
         i = 0
         for epoch in range(1, self.n_epochs+1):
             if epoch % 2 == 0: self.save_model(epoch)
-            pos_seqs=[]
-            valid_gene_seqs=[]
-            c=0
-            while len(pos_seqs)<20:
-                sampled_seqs = self.sample(num_batches_sample, epoch)
-                #print('ss', sampled_seqs[0:10])
-                preds, valid_gene_seqs_tmp= self.analyzer.predict_model(sampled_seqs, epoch,c)
-                #print('-------',preds, len(preds),len(valid_gene_seqs_tmp))
-                valid_gene_seqs+=valid_gene_seqs_tmp
-                with open(self.sample_dir + "sampled_{0}_{1}_preds.txt".format(epoch, c), 'w+') as f:
-                    f.writelines([s + '\t' + str(preds[j][0]) + '\n' for j, s in enumerate(valid_gene_seqs_tmp)])
-                good_indices = (preds > self.preds_cutoff).nonzero()[0]
-                #print('=========', good_indices)
-                #print('+++++++++++',valid_gene_seqs_tmp[1])
-                pos_seqs_tmp = [list(valid_gene_seqs_tmp[i]) for i in good_indices] 
-                pos_seqs+=pos_seqs_tmp
-                c+=1
-                print('Number of positive sequences:', len(pos_seqs))
+            sampled_seqs = self.sample(num_batches_sample, epoch)
+            preds = self.analyzer.predict_model(sampled_seqs)
+            with open(self.sample_dir + "sampled_{}_preds.txt".format(epoch), 'w+') as f:
+                f.writelines([s + '\t' + str(preds[j][0]) + '\n' for j, s in enumerate(sampled_seqs)])
+            good_indices = (preds > self.preds_cutoff).nonzero()[0]
+            pos_seqs = [list(sampled_seqs[i]) for i in good_indices]
             print("Adding {} positive sequences".format(len(pos_seqs)))
             with open(self.checkpoint_dir + "positives.txt",'a+') as f:
-                f.write("Epoch: {} \t Pos: {}\n".format(epoch, len(pos_seqs)/float(len(valid_gene_seqs))))
+                f.write("Epoch: {} \t Pos: {}\n".format(epoch, len(pos_seqs)/float(len(sampled_seqs))))
             self.remove_old_indices(len(pos_seqs))
             self.data += pos_seqs
             self.labels = np.concatenate([self.labels, np.repeat(epoch, len(pos_seqs))] )
@@ -179,9 +161,8 @@ class WGAN_LangGP():
             self.labels = self.labels[perm]
 
             for idx in range(n_batches):
-                self.charmap_new= {'P': 0, 'A': 1, 'T': 2, 'G': 3, 'C': 4}
                 _data = np.array(
-                    [[self.charmap_new[c] for c in l] for l in self.data[idx*self.batch_size:(idx+1)*self.batch_size]],
+                    [[self.charmap[c] for c in l] for l in self.data[idx*self.batch_size:(idx+1)*self.batch_size]],
                     dtype='int32'
                 )
                 data_one_hot = one_hot.transform(_data.reshape(-1, 1)).toarray().reshape(self.batch_size, -1, len(self.charmap))
@@ -192,8 +173,9 @@ class WGAN_LangGP():
                 for _ in range(self.d_steps): # Train D
                     self.D.zero_grad()
                     d_real_pred = self.D(real_data)
-                    d_real_err = torch.mean(d_real_pred) #want to push d_real as high as possible  # d_real_err:tensor(4.9055, grad_fn=<MeanBackward0>)
+                    d_real_err = torch.mean(d_real_pred) #want to push d_real as high as possible
                     d_real_err.backward(one_neg)
+
                     z_input = to_var(torch.randn(self.batch_size, 128))
                     d_fake_data = self.G(z_input).detach()
                     d_fake_pred = self.D(d_fake_data)
@@ -201,12 +183,6 @@ class WGAN_LangGP():
                     d_fake_err.backward(one)
 
                     gradient_penalty = self.calc_gradient_penalty(real_data.data, d_fake_data.data)
-                    # forward_transform = F.conv1d(
-                    #     input_data.cuda(),
-                    #     Variable(self.forward_basis, requires_grad=False).cuda(),
-                    #     stride=self.hop_length,
-                    #     padding=0).cpu()
-
                     gradient_penalty.backward()
 
                     d_err = d_fake_err - d_real_err + gradient_penalty
@@ -248,18 +224,17 @@ class WGAN_LangGP():
     def sample(self, num_batches_sample, epoch):
         decoded_seqs = []
         for i in range(num_batches_sample):
-            z = to_var(torch.randn(self.batch_size, 128))#torch.utilsにある、Variable(x)を返す
+            z = to_var(torch.randn(self.batch_size, 128))
             self.G.eval()
             torch_seqs = self.G(z)
             seqs = (torch_seqs.data).cpu().numpy()
-            #decoded_seqs += [decode_one_seq(seq, self.inv_charmap) for seq in seqs]#len(decoded_seqs):960(64*15)
-            decoded_seqs += [decode_one_seq(seq, ['P', 'A', 'T', 'G', 'C']) for seq in seqs]
+            decoded_seqs += [decode_one_seq(seq, self.inv_charmap) for seq in seqs]
         self.G.train()
         return decoded_seqs
 
 def main():
-    parser = argparse.ArgumentParser(description='FBGAN with AVP analyzer.')
-    parser.add_argument("--run_name", default= "fbgan_avp_demo", help="Name for output files")
+    parser = argparse.ArgumentParser(description='FBGAN with AMP analyzer.')
+    parser.add_argument("--run_name", default= "fbgan_amp_demo", help="Name for output files")
     parser.add_argument("--load_dir", default="./checkpoint/realProt_50aa/", help="Load pretrained GAN checkpoints")
     args = parser.parse_args()
     model = WGAN_LangGP(run_name=args.run_name)

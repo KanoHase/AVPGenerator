@@ -32,8 +32,8 @@ def load_data(classification, motif, neg=False):
     seq_nparr, amino_num, a_list = seq_to_onehot(seq_arr, max_len)
     dataset = to_dataloader(seq_nparr, label_nparr)
 
-    print(seq_nparr.shape, label_nparr.shape, max_len, amino_num, a_list)
-    return dataset, seq_nparr, label_nparr, max_len, amino_num, a_list, motif_list
+    print(seq_nparr.shape, label_nparr.shape, max_len, amino_num, a_list) #(541, 1518) (541,) 46 33 ['D', 'L', 'G', 'P', 'I', '3', 'A', 'K', 'E', 'S', 'H', 'R', 'V', 'T', 'N', 'Q', 'M', '4', 'Y', 'F', 'W', 'C', '6', '2', 'J', '1', '0', '9', 'X', '7', '5', 'O', 'Z']
+    return dataset, seq_nparr, label_nparr, max_len, amino_num, a_list, motif_list, seq_arr
 
 
 def prepare_binary(pos_dir = data_dir + binary_positive_data_file, neg_dir = data_dir + binary_negative_data_file, neg = False):
@@ -186,6 +186,26 @@ class Dataset(torch.utils.data.Dataset):
           out_label =  self.label[idx]
 
         return out_data, out_label
+
+def update_data(pos_seq, seq_nparr, order_label, label_nparr, epoch):
+    num_to_add = len(pos_seq)
+    seq_nparr, order_label = remove_old_seq(order_label, seq_nparr, num_to_add)
+    seq_nparr = np.concatenate([seq_nparr, pos_seq])
+    order_label = np.concatenate([order_label, np.repeat(epoch, len(pos_seq))] )
+    perm = np.random.permutation(len(seq_nparr))
+    seq_nparr = np.array([seq_nparr[i] for i in perm])
+    order_label = order_label[perm]
+    dataset = to_dataloader(seq_nparr, label_nparr)
+    return dataset, seq_nparr, order_label
+
+
+def remove_old_seq(order_label, seq_nparr, num_to_add):
+    to_remove = np.argsort(order_label)[:num_to_add]
+    print("@@@@@@@@@@", np.argsort(order_label), to_remove)
+    seq_nparr = np.array([d for i,d in enumerate(seq_nparr) if i not in to_remove])
+    order_label = np.delete(order_label, to_remove)
+    return seq_nparr, order_label
+
 
 #load_data("multi")
 #load_data("binary", True)
