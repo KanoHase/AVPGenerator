@@ -31,5 +31,10 @@ All default arguments for demo are provided.
   -**Expected Runtime**
     - With a Nvidia GEFORCE GTX GPU, it takes roughly 2 minutes per epoch for FBGAN. Expect this to take at least 10 minutes per epoch on a desktop.
 
+## Note
+- Data alteration
+  - amino_positive_541.txt, line 133: J → L
+  - amino_positive_541.txt, line 475: Delete O
+
 ## LICENSE
   Source files are made available under the terms of the GNU Affero General Public License (GNU AGPLv3). See GNU-AGPL-3.0.txt for details.

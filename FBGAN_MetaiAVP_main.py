@@ -155,7 +155,7 @@ class WGAN_LangGP():
             c=0
             while len(pos_seqs)<20:
                 sampled_seqs = self.sample(num_batches_sample, epoch)
-                #print('ss', sampled_seqs[0:10])
+                print('ss', sampled_seqs[0:10])
                 preds, valid_gene_seqs_tmp= self.analyzer.predict_model(sampled_seqs, epoch,c)
                 #print('-------',preds, len(preds),len(valid_gene_seqs_tmp))
                 valid_gene_seqs+=valid_gene_seqs_tmp

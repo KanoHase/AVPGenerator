@@ -1,9 +1,12 @@
 import argparse
 import os
+import math
 
 from implementations.data_utils import load_data, update_data
 from implementations.afterprocess import plot_losses, write_samples
 from implementations.torch_utils import to_var, calc_gradient_penalty
+from implementations.fb_utils import select_pos_seqs
+from implementations.translator import tensor2str
 from models import *
 
 import torch
@@ -19,14 +22,16 @@ parser.add_argument("--hidden", type=int, default=512, help="number of neurons i
 parser.add_argument("--batch", type=int, default=16, help="number of batch size")
 parser.add_argument("--show_loss", type=int, default=5, help="number of epochs of showing loss")
 parser.add_argument("--d_steps", type=int, default=10, help="number of epochs to train generator")
-parser.add_argument("--lr", type=int, default=0.0001, help="learning rate")
+parser.add_argument("--lr", type=float, default=0.0001, help="learning rate")
+parser.add_argument("--preds_cutoff", type=float, default=0.8, help="threshold of preds")
 parser.add_argument("--figure_dir", type=str, default="./figures/", help="directory name to put figures")
 parser.add_argument("--classification", type=str, default="binary", help="binary or multi for discriminator classification task")
 parser.add_argument("--generator_model", type=str, default="Gen_Lin_Block", help="choose generator model")
 parser.add_argument("--discriminator_model", type=str, default="Dis_Lin", help="choose discriminator model")
 parser.add_argument("--loss", type=str, default="WGAN-gp", help="choose loss")
 parser.add_argument("--optimizer", type=str, default="Adam", help="choose optimizer")
-parser.add_argument("--motif", type=bool, default=True, help="choose whether or not you want to include motif restriction")
+parser.add_argument("--motif", action='store_false', help="choose whether or not you want to include motif restriction. Default:True, place --motif if you want it to be False.")
+parser.add_argument("--fb", action='store_false', help="choose whether or not you want to feedback data. Default:True, place --fb if you want it to be False.")
 
 opt = parser.parse_args()
 classification = opt.classification 
@@ -46,9 +51,10 @@ if classification == "binary":
 
 def train_model():
     dataset, seq_nparr, label_nparr, max_len, amino_num, a_list, motif_list, seq_arr = load_data(classification, opt.motif) #numpy.ndarray
+    # if fb == True, dataset and seq_nparr must be random amino, not AVP
     dataloader = torch.utils.data.DataLoader(dataset, batch_size=opt.batch, shuffle=True, drop_last=True)
     order_label = np.zeros(len(seq_nparr))
-    print(seq_nparr.shape, max_len, amino_num, seq_arr[0], len(label_nparr)) #(541, 1518) 46 33 #seq_nparr=(label_nparr.shape, max_len*amino_num)
+    print("!!!!!!!!",seq_nparr.shape, max_len, amino_num, seq_arr[0], len(label_nparr), a_list) #(541, 1472) 46 32 #seq_nparr=(label_nparr.shape, max_len*amino_num)
 
     G, D = prepare_model(max_len, amino_num)
 
@@ -70,15 +76,23 @@ def train_model():
         g_err_tmp = 0
         g_fake_data_all = []
 
-        pos_seq = np.array([[0]*1518]) #kari
-        dataset, seq_nparr, order_label = update_data(pos_seq, seq_nparr, order_label, label_nparr, epoch)
-        dataloader = torch.utils.data.DataLoader(dataset, batch_size=opt.batch, shuffle=False, drop_last=True)
+        if opt.fb:
+            #we need sampled_seq here
+            #sampled_seq:['MDR...','ACD...'...]
+            sample_itr = math.floor(len(seq_nparr)/opt.batch) #kari
+            #sample_itr = 34 #kari of kari
+            sampled_seqs = generate_sample(sample_itr, opt.batch, max_len, amino_num, G, a_list, motif_list)
+            pos_seqs = select_pos_seqs(sampled_seqs, epoch, opt.preds_cutoff)
+            pos_seqs = np.array([[0]*1472]) #kari
+            dataset, seq_nparr, order_label = update_data(pos_seqs, seq_nparr, order_label, label_nparr, epoch)
+            for seq in seq_nparr:
+                target=np.array([0]*1472)
+                if np.allclose(seq, target):
+                    print("TARGET")
+            dataloader = torch.utils.data.DataLoader(dataset, batch_size=opt.batch, shuffle=False, drop_last=True)
 
         for i, (data, _) in enumerate(dataloader):
             real_data = Variable(data.type(Tensor))
-            if i ==0: 
-                print("--------------", data, data.shape, order_label, len(order_label))
-
             D.zero_grad()
             
             z_input = Variable(Tensor(np.random.normal(0, 1, (opt.batch, max_len*amino_num)))) #(64, 1518)
@@ -153,6 +167,17 @@ def prepare_model(max_len, amino_num):
     print(D)
 
     return G, D
+
+def generate_sample(sample_itr, batch_size, max_len, amino_num, G, a_list, motif_list):
+    sampled_seqs = []
+    for i in range(sample_itr):
+        z = to_var(torch.randn(batch_size, max_len*amino_num))
+        G.eval()
+        seqs = G(z)
+        seqs = seqs.reshape(-1, max_len, amino_num)
+        sampled_seqs += tensor2str(seqs, a_list, motif_list, output=False)
+    G.train()
+    return sampled_seqs
 
 
 def main():
