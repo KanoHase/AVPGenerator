@@ -1,10 +1,9 @@
 /__pycache__/
 /.vector_cache/
-/checkpoint/
-/eval/
-/fasta_data/
 /figures/
 /samples/
-/samples_fbgan/
 data/*.tsv
 data/*.vec
+/fbgan-master/
+data_fbgan/input/input*
+data_fbgan/output/output*

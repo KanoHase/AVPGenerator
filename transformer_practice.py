@@ -21,8 +21,8 @@ parser.add_argument("--motif", type=bool, default=True, help="choose whether or 
 
 opt = parser.parse_args()
 data_dir = "./data/"
-tsv_data_file = "amino_transformer_posneg.tsv"
-vec_data_file = "amino_word2vec_vectors.vec"
+tsv_data_file = "transformer_posneg.tsv"
+vec_data_file = "word2vec_vectors.vec"
 neg = opt.neg
 motif = opt.motif
 feature_size = opt.feature_size
