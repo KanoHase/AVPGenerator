@@ -1,19 +1,18 @@
 import argparse
+import os
 
-from implementations.data_utils import load_data_classify, load_data_esm
+from implementations.data_utils import load_data_classify, load_data_esm, to_dataloader
 from implementations.afterprocess import plot_losses, write_samples
 from esm_master.initialize_esm import gen_repr
 from models import *
 
 import torch
-import torch.nn as nn
 import torch.nn.functional as F
 from torch.autograd import Variable
 import torch.optim as optim
-import numpy as np
 
 parser = argparse.ArgumentParser()
-parser.add_argument("--epoch", type=int, default=10000,
+parser.add_argument("--epoch", type=int, default=1000,
                     help="number of epochs of training")
 parser.add_argument("--hidden", type=int, default=512,
                     help="number of neurons in hidden layer")
@@ -41,92 +40,120 @@ parser.add_argument("--transformer", action='store_true',
 opt = parser.parse_args()
 classification = opt.classification
 discriminator_model = opt.discriminator_model
-optimizer = opt.optimizer
 figure_dir = opt.figure_dir
 use_cuda = True if torch.cuda.is_available() else False
 Tensor = torch.cuda.FloatTensor if use_cuda else torch.FloatTensor
+checkpoint_dir = "./checkpoint/classification/"
+if not os.path.exists(checkpoint_dir):
+    os.makedirs(checkpoint_dir)
 
-if opt.transformer:
-    train_data_esm, val_data_esm, train_label_nparr, val_label_nparr = load_data_esm()
-    # data_esm: [('1079', 'ALVGATFGCGVPTI')...]
-    train_seq_repr = gen_repr(train_data_esm)
-    val_seq_repr = gen_repr(val_data_esm)
-    val_X = val_seq_repr
-    val_y = val_label_nparr
 
-    train_dataloader = torch.utils.data.DataLoader(
-        train_seq_repr, batch_size=opt.batch, shuffle=True, drop_last=True)
+def load_data(transformer):
+    if transformer:
+        train_data_esm, val_data_esm, train_label_nparr, val_label_nparr = load_data_esm()
+        # data_esm: [('1079', 'ALVGATFGCGVPTI')...]
+        train_seq_nparr = gen_repr(train_data_esm)
+        val_seq_repr = gen_repr(val_data_esm)
 
-else:
-    train_dataset, train_label_nparr, val_seq_nparr, val_label_nparr, max_len, amino_num = load_data_classify(
-        classification, opt.motif, neg=True)  # numpy.ndarray
+        val_X = val_seq_repr
+        val_y = val_label_nparr
 
-    val_X = val_seq_nparr
-    val_y = val_label_nparr
+        train_dataset = to_dataloader(train_seq_nparr, train_label_nparr)
+        train_dataloader = torch.utils.data.DataLoader(
+            train_dataset, batch_size=opt.batch, shuffle=True, drop_last=True)
 
-    train_dataloader = torch.utils.data.DataLoader(
-        train_dataset, batch_size=opt.batch, shuffle=True, drop_last=True)
-    #print(vars(train_dataset), seq_nparr, seq_nparr.shape, label_nparr, label_nparr.shape, max_len, amino_num)
+        in_dim = len(train_seq_nparr[0])
 
-if classification == "multi":
-    out_dim = len(train_label_nparr[0])
-if classification == "binary":
-    out_dim = 2
+    else:
+        train_seq_nparr, val_seq_nparr, train_label_nparr, val_label_nparr = load_data_classify(
+            classification, opt.motif, neg=True)  # numpy.ndarray
 
-pre_accuracy = 0
+        val_X = val_seq_nparr
+        val_y = val_label_nparr
 
-torch.manual_seed(1)  # seed固定、ネットワーク定義前にする必要ありそう
+        train_dataset = to_dataloader(train_seq_nparr, train_label_nparr)
+        train_dataloader = torch.utils.data.DataLoader(
+            train_dataset, batch_size=opt.batch, shuffle=True, drop_last=True)
+        #print(vars(train_dataset), seq_nparr, seq_nparr.shape, label_nparr, label_nparr.shape, max_len, amino_num)
+        in_dim = len(train_seq_nparr[0])
 
-if discriminator_model == "Dis_Lin_classify":
-    model = Dis_Lin_classify(max_len, amino_num, out_dim, opt.hidden)
+    return train_dataloader, train_seq_nparr, train_label_nparr, val_X, val_y, in_dim
 
-if optimizer == "SGD":
-    optimizer = optim.SGD(model.parameters(), lr=0.02)
 
-train_loss = []
-train_accu = []
+def train_model():
+    optimizer = opt.optimizer
+    train_dataloader, train_seq_nparr, train_label_nparr, val_X, val_y, in_dim = load_data(
+        opt.transformer)
 
-if use_cuda:
-    model = model.cuda()
+    if classification == "multi":
+        out_dim = len(train_label_nparr[0])
+    if classification == "binary":
+        out_dim = 2
 
-for epoch in range(1, opt.epoch):
-    model.train()  # 学習モード
+    pre_accuracy = 0
 
-    for i, (X, y) in enumerate(train_dataloader):
-        data = Variable(X.type(Tensor))  # 微分可能な型
-        target = Variable(y.type(Tensor))  # .reshape(-1, 1))
-        target = target.to(dtype=torch.long)
-        optimizer.zero_grad()  # 勾配初期化
-        output = model(data)  # データを流す
+    torch.manual_seed(1)  # seed固定、ネットワーク定義前にする必要ありそう
 
-        loss = F.nll_loss(output, target)
-        loss.backward()  # バックプロパゲーション
+    if discriminator_model == "Dis_Lin_classify":
+        model = Dis_Lin_classify(in_dim, out_dim, opt.hidden)
 
-        train_loss.append(loss.data.item())
-        optimizer.step()   # 重み更新
+    if optimizer == "SGD":
+        optimizer = optim.SGD(model.parameters(), lr=0.02)
 
-        prediction = output.data.max(1)[1]  # indices of max
-        prediction_sum = prediction.eq(target.data).sum(
-        ) if use_cuda else prediction.eq(target.data).sum().numpy()  # 正解率
-        accuracy = prediction_sum / len(data)
-        train_accu.append(accuracy)
+    train_loss = []
+    train_accu = []
 
-    if epoch % opt.show_loss == 0:
-        print('Train Step: {}\tLoss: {:.3f}\tAccuracy: {:.3f}'.format(
-            int(epoch/opt.show_loss), loss.data.item(), sum(train_accu)/len(train_accu)))
+    if use_cuda:
+        model = model.cuda()
 
-    if epoch % opt.show_test_result == 0:
-        model.eval()  # 推論モード
-        target_v = Variable(Tensor(val_y))  # .reshape(-1, 1))
-        output_v = model(Variable(Tensor(val_X)))
-        _, prediction_v = torch.max(output_v.data, 1)
-        prediction_v_sum = prediction_v.eq(target_v.data).sum(
-        ) if use_cuda else prediction_v.eq(target_v.data).sum().numpy()  # 正解率
-        accuracy_v = prediction_v_sum / len(prediction_v)
+    for epoch in range(1, opt.epoch):
+        model.train()  # 学習モード
 
-        if accuracy_v > pre_accuracy:
-            print(model)
-            pre_accuracy = accuracy_v
+        for _, (X, y) in enumerate(train_dataloader):
+            data = Variable(X.type(Tensor))  # 微分可能な型
+            target = Variable(y.type(Tensor))  # .reshape(-1, 1))
+            target = target.to(dtype=torch.long)
+            optimizer.zero_grad()  # 勾配初期化
+            output = model(data)  # データを流す
 
-        print('Test Step: {}\tAccuracy: {:.3f}'.format(
-            int(epoch/opt.show_test_result), accuracy_v))
+            loss = F.nll_loss(output, target)
+            loss.backward()  # バックプロパゲーション
+
+            train_loss.append(loss.data.item())
+            optimizer.step()   # 重み更新
+
+            prediction = output.data.max(1)[1]  # indices of max
+            prediction_sum = prediction.eq(target.data).sum(
+            ) if use_cuda else prediction.eq(target.data).sum().numpy()  # 正解率
+            accuracy = prediction_sum / len(data)
+            train_accu.append(accuracy)
+
+        if epoch % opt.show_loss == 0:
+            print('Train Step: {}\tLoss: {:.3f}\tAccuracy: {:.3f}'.format(
+                int(epoch/opt.show_loss), loss.data.item(), sum(train_accu)/len(train_accu)))
+
+        if epoch % opt.show_test_result == 0:
+            model.eval()  # 推論モード
+            target_v = Variable(Tensor(val_y))  # .reshape(-1, 1))
+            output_v = model(Variable(Tensor(val_X)))
+            _, prediction_v = torch.max(output_v.data, 1)
+            prediction_v_sum = prediction_v.eq(target_v.data).sum(
+            ) if use_cuda else prediction_v.eq(target_v.data).sum().numpy()  # 正解率
+            accuracy_v = prediction_v_sum / len(prediction_v)
+
+            if accuracy_v >= pre_accuracy:
+                torch.save(model.state_dict(), checkpoint_dir +
+                           "weights.pth")
+                print("MODEL SAVED")
+                pre_accuracy = accuracy_v
+
+            print('Test Step: {}\tAccuracy: {:.3f}'.format(
+                int(epoch/opt.show_test_result), accuracy_v))
+
+
+def main():
+    train_model()
+
+
+if __name__ == '__main__':
+    main()

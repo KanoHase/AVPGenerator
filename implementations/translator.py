@@ -19,12 +19,12 @@ def text2fasta(filename_list):
                     i += 1
 
 
-def tensor2str(g_fake_data, a_list, motif_list, output=True):
+def tensor2str(seq_tensor, a_list, motif_list, output=True):
     aa_samples = []
-    g_fake_data = g_fake_data.to('cpu').detach().numpy().copy()
-    # print("**********", g_fake_data.shape, len(a_list))
+    seq_nparr = seq_tensor.to('cpu').detach().numpy().copy()
+    # print("**********", seq_nparr.shape, len(a_list))
 
-    for seq in g_fake_data:
+    for seq in seq_nparr:
         seq_str = ""
 
         for aa in seq:
@@ -44,11 +44,11 @@ def tensor2str(g_fake_data, a_list, motif_list, output=True):
 
     return aa_samples
 
-# text2fasta(["positive_541", "negative_541"])
+# text2fasta(["positive_540", "negative_540"])
 
 
-def str2tensor(pos_seqs, a_list, motif_list, max_len, output=False):
-    for i, seq in enumerate(pos_seqs):
+def str2tensor(seq_str, a_list, motif_list, max_len, output=False):
+    for i, seq in enumerate(seq_str):
         zs = max_len - len(seq)
         seq += ["Z"]*zs
 
@@ -59,11 +59,11 @@ def str2tensor(pos_seqs, a_list, motif_list, max_len, output=False):
         seq_oh = enc.fit_transform(df)
 
         if i == 0:
-            pos_nparr = seq_oh
+            seq_nparr = seq_oh
 
         else:
-            pos_nparr = np.block([[[pos_nparr]], [[seq_oh]]])
+            seq_nparr = np.block([[[seq_nparr]], [[seq_oh]]])
 
-    pos_nparr = pos_nparr.reshape(-1, len(a_list)*max_len)
+    seq_nparr = seq_nparr.reshape(-1, len(a_list)*max_len)
 
-    return pos_nparr
+    return seq_nparr

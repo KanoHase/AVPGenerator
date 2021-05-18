@@ -9,8 +9,8 @@ import torchvision.transforms as transforms
 
 data_dir = "./data/"
 multi_data_file = "positive_data.txt"
-binary_positive_data_file = "positive_541.txt"
-binary_negative_data_file = "negative_541.txt"
+binary_positive_data_file = "positive_540.txt"
+binary_negative_data_file = "negative_540.txt"
 binary_positive_val_data_file = "val_positive_60.txt"
 binary_negative_val_data_file = "val_negative_60.txt"
 motif_data_file = "motif.txt"
@@ -35,12 +35,46 @@ def load_data(classification, motif, neg=False):  # Use this in WGANgp
     return dataset, seq_nparr, label_nparr, max_len, amino_num, a_list, motif_list
 
 
+def load_data_esm():
+    data_esm = []  # [("protein1", "MK...G"), ("protein2", "KA...E")]
+    label_list = []  # label (0 or 1)
+    pos_dir = data_dir + binary_positive_data_file
+    neg_dir = data_dir + binary_negative_data_file
+    val_pos_dir = data_dir + binary_positive_val_data_file
+    val_neg_dir = data_dir + binary_negative_val_data_file
+
+    dir_list = [pos_dir, neg_dir, val_pos_dir, val_neg_dir]
+    i = 1
+    max_len = 0
+    for idx, dir in enumerate(dir_list):
+        with open(dir) as f:
+            for line in f:
+                seq = line[:-1].split()
+                ele = (str(i), seq[0])
+                data_esm.append(ele)
+                pre = len(seq[0])
+                max_len = max(pre, max_len)
+                i += 1
+                label_list.append(1) if idx % 2 == 0 else label_list.append(0)
+        if dir == neg_dir:
+            train_size = len(data_esm)
+
+    train_data_esm = data_esm[:train_size]
+    val_data_esm = data_esm[train_size:]
+
+    label_nparr = np.array(label_list)
+    train_label_nparr = label_nparr[:train_size]
+    val_label_nparr = label_nparr[train_size:]
+
+    return train_data_esm, val_data_esm, train_label_nparr, val_label_nparr
+
+
 def load_data_classify(classification, motif, neg=False):  # Use this in classification
     if classification == "binary":
-        seq_arr, label_nparr, max_len = prepare_binary(neg=neg)
+        seq_arr, train_label_nparr, max_len = prepare_binary(neg=neg)
 
     if classification == "multi":
-        seq_arr, label_nparr, max_len = prepare_multi()
+        seq_arr, train_label_nparr, max_len = prepare_multi()
 
     if motif == True:
         seq_arr, motif_list = motif_restriction(seq_arr)
@@ -64,11 +98,10 @@ def load_data_classify(classification, motif, neg=False):  # Use this in classif
         seq_arr, max_len)  # make all of them one-hot
 
     train_seq_nparr = seq_nparr[:train_size]  # split
-    train_dataset = to_dataloader(train_seq_nparr, label_nparr)
     val_seq_nparr = seq_nparr[train_size:]
     # print("************", seq_nparr.shape, train_seq_nparr.shape, val_seq_nparr.shape)
 
-    return train_dataset, label_nparr, val_seq_nparr, val_label_nparr, max_len, amino_num
+    return train_seq_nparr, val_seq_nparr, train_label_nparr, val_label_nparr
 
 
 def prepare_binary(pos_dir=data_dir + binary_positive_data_file, neg_dir=data_dir + binary_negative_data_file, neg=False):
@@ -197,15 +230,14 @@ def seq_to_onehot(seq_arr, max_len):
 
 
 def to_dataloader(seq_nparr, label_nparr):
-    transform = transforms.Compose([transforms.ToTensor()])
-    dataset = Dataset(seq_nparr, label_nparr, transform)
+    dataset = Dataset(seq_nparr, label_nparr)
 
     return dataset
 
 
 class Dataset(torch.utils.data.Dataset):
 
-    def __init__(self, data, label, transform=None):
+    def __init__(self, data, label, transform=True):
         self.transform = transform
         self.data = data
         self.data_num = len(data)
@@ -216,7 +248,7 @@ class Dataset(torch.utils.data.Dataset):
 
     def __getitem__(self, idx):
         if self.transform:
-            out_data = self.transform(self.data)[0][idx]
+            out_data = torch.from_numpy(self.data)[idx]
             out_label = self.label[idx]
         else:
             out_data = self.data[idx]
@@ -229,7 +261,10 @@ def update_data(pos_nparr, seq_nparr, order_label, label_nparr, epoch):
     num_to_add = len(pos_nparr)
     seq_nparr, order_label = remove_old_seq(order_label, seq_nparr, num_to_add)
     #print(seq_nparr.shape, pos_nparr.shape)
-    seq_nparr = np.concatenate([seq_nparr, pos_nparr])
+    if len(pos_nparr) > 0:
+        seq_nparr = np.concatenate([seq_nparr, pos_nparr])
+    else:
+        seq_nparr = seq_nparr
     order_label = np.concatenate(
         [order_label, np.repeat(epoch, len(pos_nparr))])
     perm = np.random.permutation(len(seq_nparr))
@@ -246,42 +281,3 @@ def remove_old_seq(order_label, seq_nparr, num_to_add):
         [d for i, d in enumerate(seq_nparr) if i not in to_remove])
     order_label = np.delete(order_label, to_remove)
     return seq_nparr, order_label
-
-
-def load_data_esm():
-    data_esm = []  # [("protein1", "MK...G"), ("protein2", "KA...E")]
-    label_list = []  # label (0 or 1)
-    pos_dir = data_dir + binary_positive_data_file
-    neg_dir = data_dir + binary_negative_data_file
-    val_pos_dir = data_dir + binary_positive_val_data_file
-    val_neg_dir = data_dir + binary_negative_val_data_file
-
-    dir_list = [pos_dir, neg_dir, val_pos_dir, val_neg_dir]
-    i = 1
-    for idx, dir in enumerate(dir_list):
-        with open(dir) as f:
-            for line in f:
-                seq = line[:-1].split()
-                ele = (str(i), seq[0])
-                data_esm.append(ele)
-                i += 1
-                label_list.append(1) if idx % 2 == 0 else label_list.append(0)
-        if dir == neg_dir:
-            train_size = len(data_esm)
-
-        # with open(neg_dir) as f:
-        #     for line in f:
-        #         seq = line[:-1].split()
-        #         ele = (str(i), seq[0])
-        #         data_esm.append(ele)
-        #         i += 1
-        #         label_list.append(0)
-
-    train_data_esm = data_esm[:train_size]
-    val_data_esm = data_esm[train_size:]
-
-    label_nparr = np.array(label_list)
-    train_label_nparr = label_nparr[:train_size]
-    val_label_nparr = label_nparr[train_size:]
-
-    return train_data_esm, val_data_esm, train_label_nparr, val_label_nparr
