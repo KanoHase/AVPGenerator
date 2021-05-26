@@ -2,10 +2,10 @@ import argparse
 import os
 import math
 
-from implementations.data_utils import load_data, update_data
+from implementations.data_utils import load_data
 from implementations.afterprocess import plot_losses, write_samples
 from implementations.torch_utils import to_var, calc_gradient_penalty
-from implementations.fb_utils import prepare_FA, meta_select_pos, trans_select_pos
+from implementations.fb_utils import prepare_FA, meta_select_pos, trans_select_pos, update_data
 from implementations.translator import tensor2str, str2tensor
 from models import *
 
@@ -36,10 +36,12 @@ parser.add_argument("--classification", type=str, default="binary",
                     help="binary or multi for discriminator classification task")
 parser.add_argument("--fbtype", type=str, default="Transformer",
                     help="Transformer or MetaiAVP for feedback task")
+parser.add_argument("--updatetype", type=str, default="",
+                    help="")
 parser.add_argument("--generator_model", type=str,
-                    default="Gen_Lin_Block_CNN", help="choose generator model")
+                    default="Gen_Lin_Block", help="choose generator model")
 parser.add_argument("--discriminator_model", type=str,
-                    default="Dis_Lin_Block_CNN", help="choose discriminator model")
+                    default="Dis_Lin", help="choose discriminator model")
 parser.add_argument("--loss", type=str, default="WGAN-gp", help="choose loss")
 parser.add_argument("--optimizer", type=str,
                     default="Adam", help="choose optimizer")

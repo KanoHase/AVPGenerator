@@ -274,29 +274,3 @@ class Dataset(torch.utils.data.Dataset):
             out_label = self.label[idx]
 
         return out_data, out_label
-
-
-def update_data(pos_nparr, seq_nparr, order_label, label_nparr, epoch):
-    num_to_add = len(pos_nparr)
-    seq_nparr, order_label = remove_old_seq(order_label, seq_nparr, num_to_add)
-    #print(seq_nparr.shape, pos_nparr.shape)
-    if len(pos_nparr) > 0:
-        seq_nparr = np.concatenate([seq_nparr, pos_nparr])
-    else:
-        seq_nparr = seq_nparr
-    order_label = np.concatenate(
-        [order_label, np.repeat(epoch, len(pos_nparr))])
-    perm = np.random.permutation(len(seq_nparr))
-    seq_nparr = np.array([seq_nparr[i] for i in perm])
-    order_label = order_label[perm]
-    dataset = to_dataloader(seq_nparr, label_nparr)
-    return dataset, seq_nparr, order_label
-
-
-def remove_old_seq(order_label, seq_nparr, num_to_add):
-    to_remove = np.argsort(order_label)[:num_to_add]
-    # print("@@@@@@@@@@", np.argsort(order_label), to_remove)
-    seq_nparr = np.array(
-        [d for i, d in enumerate(seq_nparr) if i not in to_remove])
-    order_label = np.delete(order_label, to_remove)
-    return seq_nparr, order_label

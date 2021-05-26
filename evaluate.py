@@ -19,7 +19,7 @@ do_ctd = opt.noctd
 data_dir = "./data/"
 samples_dir = "./samples/"
 eval_dir = "./eval/"
-real_file = "val_positive_60"
+real_file = "positive_540"
 generated_file = "samples"
 eval_summary = "eval_summary"
 if not os.path.exists(eval_dir):
@@ -29,9 +29,7 @@ file_list = [[data_dir, real_file], [samples_dir, generated_file]]
 row_list = []
 
 with open(eval_dir + eval_summary + ".txt", "w") as g:
-    for file in file_list:
-        dir_name = file[0]
-        file_name = file[1]
+    for dir_name, file_name in file_list:
         with open(dir_name + file_name + ".txt") as f:
             len_list = []
             aacomp_diclist = []
