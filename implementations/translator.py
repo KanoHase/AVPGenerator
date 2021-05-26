@@ -22,7 +22,6 @@ def text2fasta(filename_list):
 def tensor2str(seq_tensor, a_list, motif_list, output=True):
     aa_samples = []
     seq_nparr = seq_tensor.to('cpu').detach().numpy().copy()
-    # print("**********", seq_nparr.shape, len(a_list))
 
     for seq in seq_nparr:
         seq_str = ""
@@ -48,9 +47,10 @@ def tensor2str(seq_tensor, a_list, motif_list, output=True):
 
 
 def str2tensor(seq_str, a_list, motif_list, max_len, output=False):
+    seq_nparr = []
     for i, seq in enumerate(seq_str):
         zs = max_len - len(seq)
-        seq += ["Z"]*zs
+        seq += ["Z"]*int(zs)
 
         df = pd.DataFrame(seq)
 

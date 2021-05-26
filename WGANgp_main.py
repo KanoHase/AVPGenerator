@@ -7,7 +7,6 @@ from implementations.afterprocess import plot_losses, write_samples
 from implementations.torch_utils import to_var, calc_gradient_penalty
 from implementations.fb_utils import prepare_FA, meta_select_pos, trans_select_pos
 from implementations.translator import tensor2str, str2tensor
-from pretrain_classification import load_data as load_data_t
 from models import *
 
 import torch
@@ -18,7 +17,7 @@ import torch.optim as optim
 import numpy as np
 
 parser = argparse.ArgumentParser()
-parser.add_argument("--epoch", type=int, default=100,
+parser.add_argument("--epoch", type=int, default=10,
                     help="number of epochs of training")
 parser.add_argument("--hidden", type=int, default=512,
                     help="number of neurons in hidden layer")
@@ -30,7 +29,7 @@ parser.add_argument("--d_steps", type=int, default=10,
                     help="number of epochs to train generator")
 parser.add_argument("--lr", type=float, default=0.0001, help="learning rate")
 parser.add_argument("--preds_cutoff", type=float,
-                    default=0.9, help="threshold of preds")
+                    default=0.8, help="threshold of preds")
 parser.add_argument("--figure_dir", type=str,
                     default="./figures/", help="directory name to put figures")
 parser.add_argument("--classification", type=str, default="binary",
@@ -38,9 +37,9 @@ parser.add_argument("--classification", type=str, default="binary",
 parser.add_argument("--fbtype", type=str, default="Transformer",
                     help="Transformer or MetaiAVP for feedback task")
 parser.add_argument("--generator_model", type=str,
-                    default="Gen_Lin_Block", help="choose generator model")
+                    default="Gen_Lin_Block_CNN", help="choose generator model")
 parser.add_argument("--discriminator_model", type=str,
-                    default="Dis_Lin", help="choose discriminator model")
+                    default="Dis_Lin_Block_CNN", help="choose discriminator model")
 parser.add_argument("--loss", type=str, default="WGAN-gp", help="choose loss")
 parser.add_argument("--optimizer", type=str,
                     default="Adam", help="choose optimizer")
@@ -64,22 +63,18 @@ out_dim = 2
 
 
 def train_model():
-    if fbtype == "Transformer":
-        dataloader, seq_nparr, label_nparr, val_X, val_y, in_dim = load_data_t(
-            True)
-    else:
-        dataset, seq_nparr, label_nparr, max_len, amino_num, a_list, motif_list = load_data(
-            classification, opt.motif)  # numpy.ndarray
-        # if nofb == True, dataset and seq_nparr must be random amino, not AVP
-        dataloader = torch.utils.data.DataLoader(
-            dataset, batch_size=opt.batch, shuffle=True, drop_last=True)
-        # (541, 1472) 46 32 #seq_nparr=(label_nparr.shape, max_len*amino_num)
-        # print("!!!!!!!!", seq_nparr.shape, max_len,
-        #       amino_num, len(label_nparr), a_list)
-        in_dim = max_len*amino_num
+    dataset, seq_nparr, label_nparr, max_len, amino_num, a_list, motif_list = load_data(
+        classification, opt.motif)  # numpy.ndarray
+    # if nofb == True, dataset and seq_nparr must be random amino, not AVP
+    dataloader = torch.utils.data.DataLoader(
+        dataset, batch_size=opt.batch, shuffle=True, drop_last=True)
+    # (541, 1472) 46 32 #seq_nparr=(label_nparr.shape, max_len*amino_num)
+    # print("!!!!!!!!", seq_nparr.shape, max_len,
+    #       amino_num, len(label_nparr), a_list)
+    in_dim = max_len*amino_num
 
     order_label = np.zeros(len(label_nparr))
-    G, D = prepare_model(in_dim)
+    G, D = prepare_model(in_dim, max_len, amino_num)
 
     if optimizer == "Adam":
         G_optimizer = optim.Adam(G.parameters(), lr=opt.lr, betas=(0.5, 0.9))
@@ -101,6 +96,8 @@ def train_model():
 
         if opt.nofb == False:  # if you're using FeedBack
             sample_itr = math.floor(len(label_nparr)/opt.batch)  # kari
+            sampled_seqs = generate_sample(
+                sample_itr, opt.batch, max_len, amino_num, G, a_list, motif_list)
 
             ###################################
             # HOMEWORK
@@ -114,21 +111,22 @@ def train_model():
             # and outputs the feedback
 
             if fbtype == "Transformer":  # if you're using Transformer representation as a Function Analyser
-                sampled_seqs = generate_sample_trans(
-                    sample_itr, opt.batch, in_dim, G)
-                FA = prepare_FA(fbtype, in_dim, out_dim, opt.hidden, opt.batch)
-                pos_nparr = trans_select_pos(
+                in_dim_esm = 768  # kari
+                FA = prepare_FA(fbtype, in_dim_esm, out_dim,
+                                opt.hidden, opt.batch)
+                pos_seqs = trans_select_pos(
                     sampled_seqs, FA, opt.preds_cutoff)
-                print("NUMBER OF POSITIVE SEQUENCES: ", len(pos_nparr))
-                pos_num.append(len(pos_nparr))
+                pos_nparr = str2tensor(
+                    pos_seqs, a_list, motif_list, max_len, output=False)
 
             if fbtype == "MetaiAVP":  # if you're using MetaiAVP as a Function Analyser
-                sampled_seqs = generate_sample(
-                    sample_itr, opt.batch, max_len, amino_num, G, a_list, motif_list)
                 pos_seqs = meta_select_pos(
                     sampled_seqs, epoch, opt.preds_cutoff)
                 pos_nparr = str2tensor(
                     pos_seqs, a_list, motif_list, max_len, output=False)
+
+            print("NUMBER OF POSITIVE SEQUENCES: ", len(pos_nparr))
+            pos_num.append(len(pos_nparr))
 
             dataset, seq_nparr, order_label = update_data(
                 pos_nparr, seq_nparr, order_label, label_nparr, epoch)
@@ -200,22 +198,23 @@ def train_model():
 
         # write amino acid data when g_err is low
         if epoch > 1:
-            if fbtype == "Transformer":
-                continue
-            else:
-                g_fake_data_all = g_fake_data_all.reshape(
-                    -1, max_len, amino_num)
-                best_g_err, best_epoch = write_samples(
-                    g_err_tmp, best_g_err, epoch, best_epoch, g_fake_data_all, a_list, motif_list)
+            # if fbtype == "Transformer":
+            #     continue
+            # else:
+            g_fake_data_all = g_fake_data_all.reshape(
+                -1, max_len, amino_num)
+            best_g_err, best_epoch = write_samples(
+                g_err_tmp, best_g_err, epoch, best_epoch, g_fake_data_all, a_list, motif_list)
 
     # print('Best epoch:{}, Minimum g_error:{}'.format(best_epoch, best_g_err))
 
 
-def prepare_model(in_dim):
+def prepare_model(in_dim, max_len, amino_num):
     if generator_model == "Gen_Lin_Block_CNN":
-        G = Gen_Lin_Block_CNN(in_dim, out_dim, opt.hidden)
+        G = Gen_Lin_Block_CNN(in_dim, max_len, amino_num,
+                              opt.hidden, opt.batch)
     if discriminator_model == "Dis_Lin_Block_CNN":
-        D = Dis_Lin_Block_CNN(in_dim, out_dim, opt.hidden)
+        D = Dis_Lin_Block_CNN(in_dim, max_len, amino_num, opt.hidden)
     if generator_model == "Gen_Lin_Block":
         G = Gen_Lin_Block(in_dim, out_dim, opt.hidden)
     if discriminator_model == "Dis_Lin":
@@ -245,19 +244,19 @@ def generate_sample(sample_itr, batch_size, max_len, amino_num, G, a_list, motif
     return sampled_seqs
 
 
-def generate_sample_trans(sample_itr, batch_size, in_dim, G):
-    for i in range(sample_itr):
-        z = to_var(torch.randn(batch_size, in_dim))
-        G.eval()
-        temp_seq_repr = G(z)
-        temp_seq_repr = temp_seq_repr.to('cpu').detach().numpy().copy()
-        if i == 0:
-            sampled_seqs = temp_seq_repr
-        else:
-            sampled_seqs = np.concatenate(
-                (sampled_seqs, temp_seq_repr), axis=0)
-    G.train()
-    return sampled_seqs
+# def generate_sample_trans(sample_itr, batch_size, in_dim, G):
+#     for i in range(sample_itr):
+#         z = to_var(torch.randn(batch_size, in_dim))
+#         G.eval()
+#         temp_seq_repr = G(z)
+#         temp_seq_repr = temp_seq_repr.to('cpu').detach().numpy().copy()
+#         if i == 0:
+#             sampled_seqs = temp_seq_repr
+#         else:
+#             sampled_seqs = np.concatenate(
+#                 (sampled_seqs, temp_seq_repr), axis=0)
+#     G.train()
+#     return sampled_seqs
 
 
 def main():

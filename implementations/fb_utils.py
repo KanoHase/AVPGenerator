@@ -2,6 +2,8 @@ import os
 import numpy as np
 import time
 from FunctionAnalyser import TransClassifier
+from implementations.data_utils import load_data_esm
+from esm_master.initialize_esm import gen_repr
 
 input_path = './data_fbgan/input/'
 output_path = './data_fbgan/output/'
@@ -21,9 +23,11 @@ def prepare_FA(fbtype, in_dim, out_dim, hidden, batch):
 
 
 def trans_select_pos(sampled_seqs, FA, preds_cutoff):
-    all_preds = FA.analyse_function(sampled_seqs)
+    data_esm = load_data_esm(sampled_seqs)
+    seq_repr = gen_repr(data_esm)
+    all_preds = FA.analyse_function(seq_repr)
     good_indices = (all_preds > preds_cutoff).nonzero()[0]
-    pos_seqs = np.array([sampled_seqs[i] for i in good_indices])
+    pos_seqs = [list(sampled_seqs[i]) for i in good_indices]
     return pos_seqs
 
 

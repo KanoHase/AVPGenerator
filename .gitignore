@@ -8,3 +8,4 @@ data/*.vec
 data_fbgan/input/input*
 data_fbgan/output/output*
 /checkpoint/
+/eval/

@@ -35,38 +35,57 @@ def load_data(classification, motif, neg=False):  # Use this in WGANgp
     return dataset, seq_nparr, label_nparr, max_len, amino_num, a_list, motif_list
 
 
-def load_data_esm():
-    data_esm = []  # [("protein1", "MK...G"), ("protein2", "KA...E")]
-    label_list = []  # label (0 or 1)
-    pos_dir = data_dir + binary_positive_data_file
-    neg_dir = data_dir + binary_negative_data_file
-    val_pos_dir = data_dir + binary_positive_val_data_file
-    val_neg_dir = data_dir + binary_negative_val_data_file
+def load_data_esm(sampled_seqs=None):
+    """
+    If pretrain, distinguish pos and neg.
+    If not, returns data_esm based on sampled_seqs.
 
-    dir_list = [pos_dir, neg_dir, val_pos_dir, val_neg_dir]
+    INPUT
+    if pretrain == True
+    sampled_seqs: ["MK...G", "KA...E"]
+
+    OUTPUT
+    data_esm: [("protein1", "MK...G"), ("protein2", "KA...E")...]
+    label_nparr: [0 0 ... 1]
+    """
+    data_esm = []
     i = 1
-    max_len = 0
-    for idx, dir in enumerate(dir_list):
-        with open(dir) as f:
-            for line in f:
-                seq = line[:-1].split()
-                ele = (str(i), seq[0])
-                data_esm.append(ele)
-                pre = len(seq[0])
-                max_len = max(pre, max_len)
-                i += 1
-                label_list.append(1) if idx % 2 == 0 else label_list.append(0)
-        if dir == neg_dir:
-            train_size = len(data_esm)
 
-    train_data_esm = data_esm[:train_size]
-    val_data_esm = data_esm[train_size:]
+    if sampled_seqs != None:
+        for seq in sampled_seqs:
+            ele = (str(i), seq)
+            data_esm.append(ele)
+            i += 1
+        return data_esm
 
-    label_nparr = np.array(label_list)
-    train_label_nparr = label_nparr[:train_size]
-    val_label_nparr = label_nparr[train_size:]
+    else:
+        label_list = []  # label (0 or 1)
+        pos_dir = data_dir + binary_positive_data_file
+        neg_dir = data_dir + binary_negative_data_file
+        val_pos_dir = data_dir + binary_positive_val_data_file
+        val_neg_dir = data_dir + binary_negative_val_data_file
 
-    return train_data_esm, val_data_esm, train_label_nparr, val_label_nparr
+        dir_list = [pos_dir, neg_dir, val_pos_dir, val_neg_dir]
+        for idx, dir in enumerate(dir_list):
+            with open(dir) as f:
+                for line in f:
+                    seq = line[:-1].split()
+                    ele = (str(i), seq[0])
+                    data_esm.append(ele)
+                    i += 1
+                    label_list.append(
+                        1) if idx % 2 == 0 else label_list.append(0)
+            if dir == neg_dir:
+                train_size = len(data_esm)
+
+        train_data_esm = data_esm[:train_size]
+        val_data_esm = data_esm[train_size:]
+
+        label_nparr = np.array(label_list)
+        train_label_nparr = label_nparr[:train_size]
+        val_label_nparr = label_nparr[train_size:]
+
+        return train_data_esm, val_data_esm, train_label_nparr, val_label_nparr
 
 
 def load_data_classify(classification, motif, neg=False):  # Use this in classification

@@ -34,12 +34,13 @@ parser.add_argument("--optimizer", type=str,
                     default="SGD", help="choose optimizer")
 parser.add_argument("--motif", action='store_true',
                     help="choose whether or not you want to include motif restriction. Default:False, place --motif if you want it to be True.")
-parser.add_argument("--transformer", action='store_true',
-                    help="choose whether or not you want to use transformer representation. Default:False, place --transformer if you want it to be True. WARNING: motif restriction cannot be used if transformer == True")
+parser.add_argument("--notransformer", action='store_false',
+                    help="choose whether or not you want to use transformer representation. Default:True, place --notransformer if you want it to be False. WARNING: motif restriction cannot be used if you use transformer")
 
 opt = parser.parse_args()
 classification = opt.classification
 discriminator_model = opt.discriminator_model
+transformer = opt.notransformer
 figure_dir = opt.figure_dir
 use_cuda = True if torch.cuda.is_available() else False
 Tensor = torch.cuda.FloatTensor if use_cuda else torch.FloatTensor
@@ -83,7 +84,7 @@ def load_data(transformer):
 def train_model():
     optimizer = opt.optimizer
     train_dataloader, train_seq_nparr, train_label_nparr, val_X, val_y, in_dim = load_data(
-        opt.transformer)
+        transformer)
 
     if classification == "multi":
         out_dim = len(train_label_nparr[0])
