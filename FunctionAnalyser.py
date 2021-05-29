@@ -1,4 +1,3 @@
-import argparse
 import os
 import glob
 import numpy as np
@@ -13,20 +12,6 @@ import torch.nn.functional as F
 from torch.autograd import Variable
 import torch.optim as optim
 
-parser = argparse.ArgumentParser()
-parser.add_argument("--show_loss", type=int, default=5,
-                    help="number of epochs of showing loss")
-parser.add_argument("--show_test_result", type=int,
-                    default=100, help="number of epochs of showing loss")
-parser.add_argument("--figure_dir", type=str,
-                    default="./figures/", help="directory name to put figures")
-parser.add_argument("--classification", type=str, default="binary",
-                    help="binary or multi for discriminator classification task")
-parser.add_argument("--which_model", type=str,
-                    default="Dis_Lin_classify", help="choose network model")
-
-opt = parser.parse_args()
-
 
 class TransClassifier():
     def __init__(self, in_dim, out_dim, hidden, batch):
@@ -34,9 +19,7 @@ class TransClassifier():
         self.hidden = hidden
         self.in_dim = in_dim
         self.out_dim = out_dim
-        self.classification = opt.classification
-        self.which_model = opt.which_model
-        self.figure_dir = opt.figure_dir
+        self.which_model = "Dis_Lin_classify"
         self.use_cuda = True if torch.cuda.is_available() else False
         self.Tensor = torch.cuda.FloatTensor if self.use_cuda else torch.FloatTensor
         self.checkpoint_dir = "./checkpoint/classification/"
@@ -69,7 +52,6 @@ class TransClassifier():
         all_preds_posneg = self.model(data)
         all_preds = all_preds_posneg[:, 1]
         all_preds = all_preds.to('cpu').detach().numpy().copy()
-        print("Made predictions...")
         return all_preds
 
 

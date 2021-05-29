@@ -15,19 +15,22 @@ import torch.nn.functional as F
 from torch.autograd import Variable
 import torch.optim as optim
 import numpy as np
+import sys
+np.set_printoptions(threshold=sys.maxsize)
 
 parser = argparse.ArgumentParser()
-parser.add_argument("--epoch", type=int, default=10,
+parser.add_argument("--epoch", type=int, default=50,
                     help="number of epochs of training")
 parser.add_argument("--hidden", type=int, default=512,
                     help="number of neurons in hidden layer")
-parser.add_argument("--batch", type=int, default=16,
+parser.add_argument("--batch", type=int, default=64,
                     help="number of batch size")
 parser.add_argument("--show_loss", type=int, default=5,
                     help="number of epochs of showing loss")
 parser.add_argument("--d_steps", type=int, default=10,
                     help="number of epochs to train generator")
-parser.add_argument("--lr", type=float, default=0.0001, help="learning rate")
+parser.add_argument("--lr", type=float, default=0.0001,
+                    help="learning rate")
 parser.add_argument("--preds_cutoff", type=float,
                     default=0.8, help="threshold of preds")
 parser.add_argument("--figure_dir", type=str,
@@ -36,29 +39,35 @@ parser.add_argument("--classification", type=str, default="binary",
                     help="binary or multi for discriminator classification task")
 parser.add_argument("--fbtype", type=str, default="Transformer",
                     help="Transformer or MetaiAVP for feedback task")
-parser.add_argument("--updatetype", type=str, default="",
-                    help="")
+parser.add_argument("--updatetype", type=str, default="P-S",
+                    help="Choose data update type: PR-PS or P-S (start-end, R:Random, P:Positive, S:Synthetic)")
 parser.add_argument("--generator_model", type=str,
                     default="Gen_Lin_Block", help="choose generator model")
 parser.add_argument("--discriminator_model", type=str,
                     default="Dis_Lin", help="choose discriminator model")
-parser.add_argument("--loss", type=str, default="WGAN-gp", help="choose loss")
+parser.add_argument("--loss", type=str,
+                    default="WGAN-gp", help="choose loss")
 parser.add_argument("--optimizer", type=str,
                     default="Adam", help="choose optimizer")
-parser.add_argument("--motif", action='store_true',
+parser.add_argument("--motif",  action='store_true',
                     help="choose whether or not you want to include motif restriction. Default:False, place --motif if you want it to be True.")
-parser.add_argument("--nofb", action='store_true',
+parser.add_argument('--nofb',  action='store_true',
                     help="choose whether or not you want to feedback data. Default:False, place --nofb if you do not need FB.")
 
 opt = parser.parse_args()
 classification = opt.classification
 fbtype = opt.fbtype
+updatetype = opt.updatetype
 generator_model = opt.generator_model
 discriminator_model = opt.discriminator_model
 optimizer = opt.optimizer
 figure_dir = opt.figure_dir
 if not os.path.exists(figure_dir):
     os.makedirs(figure_dir)
+run_name_dir = "ut" + updatetype + "_" + "nofb" + \
+    str(opt.nofb) + "_" + "ep" + str(opt.epoch) + "_" + "ba" + str(opt.batch) + "_" + "lr" + \
+    str(opt.lr) + "_" + "pc" + str(opt.preds_cutoff) + "_" + "gen" + \
+    generator_model + "_" + "dis" + discriminator_model + "/"  # kari
 use_cuda = True if torch.cuda.is_available() else False
 Tensor = torch.cuda.FloatTensor if use_cuda else torch.FloatTensor
 out_dim = 2
@@ -66,7 +75,7 @@ out_dim = 2
 
 def train_model():
     dataset, seq_nparr, label_nparr, max_len, amino_num, a_list, motif_list = load_data(
-        classification, opt.motif)  # numpy.ndarray
+        updatetype, classification, opt.motif)  # numpy.ndarray
     # if nofb == True, dataset and seq_nparr must be random amino, not AVP
     dataloader = torch.utils.data.DataLoader(
         dataset, batch_size=opt.batch, shuffle=True, drop_last=True)
@@ -75,7 +84,15 @@ def train_model():
     #       amino_num, len(label_nparr), a_list)
     in_dim = max_len*amino_num
 
-    order_label = np.zeros(len(label_nparr))
+    if updatetype == "PR-PS":
+        pos_size = np.count_nonzero(label_nparr == 1)
+        rand_num = len(label_nparr) - pos_size
+        order_label = [opt.epoch+100]*pos_size
+        order_label += [0]*rand_num
+        order_label = np.array(order_label)
+    else:
+        order_label = np.zeros(len(label_nparr))
+
     G, D = prepare_model(in_dim, max_len, amino_num)
 
     if optimizer == "Adam":
@@ -95,22 +112,12 @@ def train_model():
     for epoch in range(1, opt.epoch):
         g_err_tmp = 0
         g_fake_data_all = []
+        # nofb = True
 
         if opt.nofb == False:  # if you're using FeedBack
             sample_itr = math.floor(len(label_nparr)/opt.batch)  # kari
             sampled_seqs = generate_sample(
                 sample_itr, opt.batch, max_len, amino_num, G, a_list, motif_list)
-
-            ###################################
-            # HOMEWORK
-            #########################################
-            # Modify this bit so that you get feedback
-            # using the 3-layer neural network
-            ###
-            # Define a class member parameter called model
-            # that takes a sequence and outputs the class
-            # and define a feedback function that takes model
-            # and outputs the feedback
 
             if fbtype == "Transformer":  # if you're using Transformer representation as a Function Analyser
                 in_dim_esm = 768  # kari
@@ -198,17 +205,12 @@ def train_model():
                 plot_losses([pos_num], ["pos_num"],
                             figure_dir + "positive_numbers.png")
 
-        # write amino acid data when g_err is low
-        if epoch > 1:
-            # if fbtype == "Transformer":
-            #     continue
-            # else:
-            g_fake_data_all = g_fake_data_all.reshape(
-                -1, max_len, amino_num)
-            best_g_err, best_epoch = write_samples(
-                g_err_tmp, best_g_err, epoch, best_epoch, g_fake_data_all, a_list, motif_list)
+        g_fake_data_all = g_fake_data_all.reshape(
+            -1, max_len, amino_num)
+        best_g_err, best_epoch = write_samples(g_fake_data_all, epoch, best_epoch, g_err_tmp,
+                                               best_g_err, run_name_dir, a_list, motif_list)
 
-    # print('Best epoch:{}, Minimum g_error:{}'.format(best_epoch, best_g_err))
+    print('Best epoch:{}, Minimum g_error:{}'.format(best_epoch, best_g_err))
 
 
 def prepare_model(in_dim, max_len, amino_num):
@@ -244,21 +246,6 @@ def generate_sample(sample_itr, batch_size, max_len, amino_num, G, a_list, motif
                                    a_list, motif_list, output=False)
     G.train()
     return sampled_seqs
-
-
-# def generate_sample_trans(sample_itr, batch_size, in_dim, G):
-#     for i in range(sample_itr):
-#         z = to_var(torch.randn(batch_size, in_dim))
-#         G.eval()
-#         temp_seq_repr = G(z)
-#         temp_seq_repr = temp_seq_repr.to('cpu').detach().numpy().copy()
-#         if i == 0:
-#             sampled_seqs = temp_seq_repr
-#         else:
-#             sampled_seqs = np.concatenate(
-#                 (sampled_seqs, temp_seq_repr), axis=0)
-#     G.train()
-#     return sampled_seqs
 
 
 def main():

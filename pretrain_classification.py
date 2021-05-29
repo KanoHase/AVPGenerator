@@ -22,14 +22,13 @@ parser.add_argument("--show_loss", type=int, default=5,
                     help="number of epochs of showing loss")
 parser.add_argument("--show_test_result", type=int,
                     default=100, help="number of epochs of showing loss")
-parser.add_argument("--lr", type=int, default=0.0001, help="learning rate")
+parser.add_argument("--lr", type=int, default=0.02, help="learning rate")
 parser.add_argument("--figure_dir", type=str,
                     default="./figures/", help="directory name to put figures")
 parser.add_argument("--classification", type=str, default="binary",
                     help="binary or multi for discriminator classification task")
-parser.add_argument("--discriminator_model", type=str,
+parser.add_argument("--classifier_model", type=str,
                     default="Dis_Lin_classify", help="choose discriminator model")
-parser.add_argument("--loss", type=str, default="WGAN-gp", help="choose loss")
 parser.add_argument("--optimizer", type=str,
                     default="SGD", help="choose optimizer")
 parser.add_argument("--motif", action='store_true',
@@ -39,7 +38,7 @@ parser.add_argument("--notransformer", action='store_false',
 
 opt = parser.parse_args()
 classification = opt.classification
-discriminator_model = opt.discriminator_model
+classifier_model = opt.classifier_model
 transformer = opt.notransformer
 figure_dir = opt.figure_dir
 use_cuda = True if torch.cuda.is_available() else False
@@ -67,7 +66,7 @@ def load_data(transformer):
 
     else:
         train_seq_nparr, val_seq_nparr, train_label_nparr, val_label_nparr = load_data_classify(
-            classification, opt.motif, neg=True)  # numpy.ndarray
+            classification, opt.motif)  # numpy.ndarray
 
         val_X = val_seq_nparr
         val_y = val_label_nparr
@@ -95,11 +94,11 @@ def train_model():
 
     torch.manual_seed(1)  # seed固定、ネットワーク定義前にする必要ありそう
 
-    if discriminator_model == "Dis_Lin_classify":
+    if classifier_model == "Dis_Lin_classify":
         model = Dis_Lin_classify(in_dim, out_dim, opt.hidden)
 
     if optimizer == "SGD":
-        optimizer = optim.SGD(model.parameters(), lr=0.02)
+        optimizer = optim.SGD(model.parameters(), lr=opt.lr)
 
     train_loss = []
     train_accu = []

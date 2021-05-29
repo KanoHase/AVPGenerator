@@ -9,3 +9,8 @@ data_fbgan/input/input*
 data_fbgan/output/output*
 /checkpoint/
 /eval/
+/dna_to_amino.py
+/FBGAN_MetaiAVP_main.py
+/transformer_model.py
+/transformer_practice.py
+/test.py

@@ -13,12 +13,19 @@ binary_positive_data_file = "positive_540.txt"
 binary_negative_data_file = "negative_540.txt"
 binary_positive_val_data_file = "val_positive_60.txt"
 binary_negative_val_data_file = "val_negative_60.txt"
+random_data_file = "random_seq.txt"
 motif_data_file = "motif.txt"
+data_size = 2000
 
 
-def load_data(classification, motif, neg=False):  # Use this in WGANgp
-    if classification == "binary":
-        seq_arr, label_nparr, max_len = prepare_binary(neg=neg)
+def load_data(updatetype, classification, motif):  # Use this in WGANgp
+    if classification == "binary" and updatetype == "P-S":
+        seq_arr, label_nparr, max_len = prepare_binary(
+            pos_dir=data_dir + binary_positive_data_file)
+
+    if classification == "binary" and updatetype == "PR-PS":
+        seq_arr, label_nparr, max_len = prepare_binary(
+            pos_dir=data_dir + binary_positive_data_file, rand_dir=data_dir + random_data_file)
 
     if classification == "multi":
         seq_arr, label_nparr, max_len = prepare_multi()
@@ -31,7 +38,9 @@ def load_data(classification, motif, neg=False):  # Use this in WGANgp
 
     seq_nparr, amino_num, a_list = seq_to_onehot(seq_arr, max_len)
     dataset = to_dataloader(seq_nparr, label_nparr)
-    # print("==========", seq_nparr.shape, label_nparr.shape, max_len, amino_num, a_list) #(541, 1518) (541,) 46 33 ['D', 'L', 'G', 'P', 'I', '3', 'A', 'K', 'E', 'S', 'H', 'R', 'V', 'T', 'N', 'Q', 'M', '4', 'Y', 'F', 'W', 'C', '6', '2', 'J', '1', '0', '9', 'X', '7', '5', 'O', 'Z']
+    # print("==========", seq_nparr.shape,
+    #       label_nparr.shape, max_len, amino_num, a_list)
+    # (541, 1518) (541,) 46 33 ['D', 'L', 'G', 'P', 'I', '3', 'A', 'K', 'E', 'S', 'H', 'R', 'V', 'T', 'N', 'Q', 'M', '4', 'Y', 'F', 'W', 'C', '6', '2', 'J', '1', '0', '9', 'X', '7', '5', 'O', 'Z']
     return dataset, seq_nparr, label_nparr, max_len, amino_num, a_list, motif_list
 
 
@@ -88,9 +97,10 @@ def load_data_esm(sampled_seqs=None):
         return train_data_esm, val_data_esm, train_label_nparr, val_label_nparr
 
 
-def load_data_classify(classification, motif, neg=False):  # Use this in classification
+def load_data_classify(classification, motif):  # Use this in classification
     if classification == "binary":
-        seq_arr, train_label_nparr, max_len = prepare_binary(neg=neg)
+        seq_arr, train_label_nparr, max_len = prepare_binary(
+            pos_dir=data_dir + binary_positive_data_file, neg_dir=data_dir + binary_negative_data_file)
 
     if classification == "multi":
         seq_arr, train_label_nparr, max_len = prepare_multi()
@@ -102,7 +112,7 @@ def load_data_classify(classification, motif, neg=False):  # Use this in classif
         motif_list = []
 
     val_seq_arr, val_label_nparr, val_max_len = prepare_binary(
-        pos_dir=data_dir + binary_positive_val_data_file, neg_dir=data_dir + binary_negative_val_data_file, neg=neg)
+        pos_dir=data_dir + binary_positive_val_data_file, neg_dir=data_dir + binary_negative_val_data_file)
 
     if motif == True:
         val_seq_arr, val_motif_list = motif_restriction(val_seq_arr)
@@ -123,22 +133,23 @@ def load_data_classify(classification, motif, neg=False):  # Use this in classif
     return train_seq_nparr, val_seq_nparr, train_label_nparr, val_label_nparr
 
 
-def prepare_binary(pos_dir=data_dir + binary_positive_data_file, neg_dir=data_dir + binary_negative_data_file, neg=False):
+def prepare_binary(pos_dir=None, neg_dir=None, rand_dir=None):
     seq_arr = []  # sequence array(letters by letters) in str
     label_list = []  # label (0 or 1)
     pos_max_len = 0  # max sequence length
     neg_max_len = 0  # max sequence length
 
-    with open(pos_dir) as f:
-        for line in f:
-            tmp = line[:-1].split()
-            seq = list(tmp[0])
-            seq_arr.append(seq)
-            pre = len(seq)
-            pos_max_len = max(pre, pos_max_len)
-            label_list.append(1)
+    if pos_dir:
+        with open(pos_dir) as f:
+            for line in f:
+                tmp = line[:-1].split()
+                seq = list(tmp[0])
+                seq_arr.append(seq)
+                pre = len(seq)
+                pos_max_len = max(pre, pos_max_len)
+                label_list.append(1)
 
-    if neg == True:
+    if neg_dir:
         with open(neg_dir) as f:
             for line in f:
                 tmp = line[:-1].split()
@@ -147,6 +158,19 @@ def prepare_binary(pos_dir=data_dir + binary_positive_data_file, neg_dir=data_di
                 pre = len(seq)
                 neg_max_len = max(pre, neg_max_len)
                 label_list.append(0)
+
+    if rand_dir:
+        with open(rand_dir) as f:
+            for line in f:
+                tmp = line[:-1].split()
+                seq = list(tmp[0])
+                seq_arr.append(seq)
+                pre = len(seq)
+                neg_max_len = max(pre, neg_max_len)
+                label_list.append(0)
+
+                if len(seq_arr) == data_size:
+                    break
 
     label_nparr = np.array(label_list)
     max_len = max(pos_max_len, neg_max_len)
