@@ -1,0 +1,17 @@
+/__pycache__/
+/.vector_cache/
+/figures/
+/samples/
+/samples_fasta/
+data/*.tsv
+data/*.vec
+/fbgan-master/
+data_fbgan/input/input*
+data_fbgan/output/output*
+/checkpoint/
+/eval/
+/dna_to_amino.py
+/FBGAN_MetaiAVP_main.py
+/transformer_model.py
+/transformer_practice.py
+/test.py
