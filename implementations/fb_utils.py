@@ -28,10 +28,10 @@ def trans_select_pos(sampled_seqs, FA, preds_cutoff):
     seq_repr = gen_repr(data_esm)
     all_preds = FA.analyse_function(seq_repr)
     good_indices = (all_preds > preds_cutoff).nonzero()[0]
-    bad_indices = (all_preds <= preds_cutoff).nonzero()[0]
+    # bad_indices = (all_preds <= preds_cutoff).nonzero()[0]
     pos_seqs = [list(sampled_seqs[i]) for i in good_indices]
-    neg_seqs = [list(sampled_seqs[i]) for i in bad_indices]
-    return pos_seqs, neg_seqs
+    # neg_seqs = [list(sampled_seqs[i]) for i in bad_indices]
+    return pos_seqs
 
 
 def meta_select_pos(sampled_seqs, epoch, preds_cutoff):
@@ -39,10 +39,10 @@ def meta_select_pos(sampled_seqs, epoch, preds_cutoff):
 
     preds = make_pred(epoch)
     good_indices = (preds > preds_cutoff).nonzero()[0]
-    bad_indices = (preds <= preds_cutoff).nonzero()[0]
+    # bad_indices = (preds <= preds_cutoff).nonzero()[0]
     pos_seqs = [list(sampled_seqs[i]) for i in good_indices]
-    neg_seqs = [list(sampled_seqs[i]) for i in bad_indices]
-    return pos_seqs, neg_seqs
+    # neg_seqs = [list(sampled_seqs[i]) for i in bad_indices]
+    return pos_seqs
 
 
 def make_input_file(sampled_seqs, epoch):
@@ -97,14 +97,12 @@ def remove_old_seq(order_label, seq_nparr, num_to_add):
     return seq_nparr, order_label
 
 
-def soften_pos_seq(pos_seqs, neg_seqs, fbprop):
+def soften_pos_seq(pos_seqs, rand_seqs, fbprop):
     pos_num = int(len(pos_seqs) * fbprop)
-    neg_num = int(len(pos_seqs) - pos_num)
-    print("neg_seqs, neg_num:", len(neg_seqs), neg_num)
+    rand_num = int(len(pos_seqs) - pos_num)
     soften_pos_seqs = random.sample(pos_seqs, pos_num)
-    soften_neg_seqs = random.sample(neg_seqs, neg_num) if len(
-        neg_seqs) >= neg_num else neg_seqs
-    mixed_pos_seq = soften_pos_seqs + soften_neg_seqs
+    soften_rand_seqs = random.sample(rand_seqs, rand_num)
+    mixed_pos_seq = soften_pos_seqs + soften_rand_seqs
     return mixed_pos_seq
 
 
