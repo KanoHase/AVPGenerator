@@ -16,26 +16,25 @@ binary_positive_val_data_file = "val_positive.txt"
 binary_negative_val_data_file = "val_negative_noexp.txt"
 random_data_file = "random_seq.txt"
 motif_data_file = "motif.txt"
-data_size = 2000
 
 
-def load_data(updatetype, classification, motif, revise=None):  # Use this in WGANgp
+def load_data(updatetype, classification, motif, revise=None, data_size=None):  # Use this in WGANgp
     if revise:
         binary_positive_revised_data_file = "positive_" + revise + ".txt"
 
     train_pos_dir = data_dir + binary_positive_revised_data_file if revise else data_dir + \
         binary_positive_data_file
-    if classification == "binary" and updatetype == "P-S":
+    if classification == "binary" and updatetype == "P-PS":
         seq_arr, label_nparr, max_len, rand_seqs = prepare_binary(
             pos_dir=train_pos_dir)
 
     if classification == "binary" and updatetype == "PR-PS":
         seq_arr, label_nparr, max_len, rand_seqs = prepare_binary(
-            pos_dir=train_pos_dir, rand_dir=data_dir + random_data_file)
+            pos_dir=train_pos_dir, rand_dir=data_dir + random_data_file, data_size=data_size)
 
     if classification == "binary" and updatetype == "R-S":
         seq_arr, label_nparr, max_len, rand_seqs = prepare_binary(
-            rand_dir=data_dir + random_data_file)
+            rand_dir=data_dir + random_data_file, data_size=data_size)
 
     if classification == "multi":
         seq_arr, label_nparr, max_len = prepare_multi()
@@ -158,7 +157,7 @@ def load_data_classify(classification, motif, revise=None):  # Use this in class
     return train_seq_nparr, val_seq_nparr, train_label_nparr, val_label_nparr
 
 
-def prepare_binary(pos_dir=None, neg_dir=None, rand_dir=None):
+def prepare_binary(pos_dir=None, neg_dir=None, rand_dir=None, data_size=None):
     seq_arr = []  # sequence array(letters by letters) in str
     rand_seqs = []  # random sequences other than the seqs included in seq_arr [['T', 'Q', ...'K'], [...]]
     label_list = []  # label (0 or 1)
@@ -316,6 +315,9 @@ def seq_to_onehot(seq_arr, max_len):
 
 
 def to_dataloader(seq_nparr, label_nparr):
+    if len(seq_nparr) > len(label_nparr):
+        label_nparr = np.concatenate(
+            [label_nparr, np.array([1]*(len(seq_nparr) - len(label_nparr)))], 0)
     dataset = Dataset(seq_nparr, label_nparr)
 
     return dataset

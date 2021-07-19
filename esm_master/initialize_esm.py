@@ -33,6 +33,7 @@ def gen_repr(data):
         sequence_representations.append(token_representations[i, 1 : len(seq) + 1].mean(0))
     # sequence_representations:2×1280
     sequence_representations = np.array(sequence_representations)
+    print("!!!!!!!!", sequence_representations.shape)
 
     return sequence_representations
 

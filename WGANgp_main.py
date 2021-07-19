@@ -3,9 +3,9 @@ import os
 import math
 
 from implementations.data_utils import load_data
-from implementations.afterprocess import plot_losses, write_samples
+from implementations.afterprocess import make_plot, write_samples
 from implementations.torch_utils import to_var, calc_gradient_penalty
-from implementations.fb_utils import prepare_FA, meta_select_pos, trans_select_pos, update_data, soften_pos_seq, mutate_seqs
+from implementations.fb_utils import prepare_FA, meta_select_pos, trans_select_pos, update_data, update_data_ps, soften_pos_seq, mutate_seqs
 from implementations.translator import tensor2str, str2tensor
 from models import *
 
@@ -33,16 +33,18 @@ parser.add_argument("--lr", type=float, default=0.0001,
                     help="learning rate")
 parser.add_argument("--preds_cutoff", type=float,
                     default=0.8, help="threshold of preds")
+parser.add_argument("--data_size", type=int,
+                    default=2000, help="max data size")
 parser.add_argument("--figure_dir", type=str,
                     default="./figures/", help="directory name to put figures")
 parser.add_argument("--classification", type=str, default="binary",
                     help="binary or multi for discriminator classification task")
 parser.add_argument("--fbtype", type=str, default="Transformer",
                     help="Transformer or MetaiAVP for feedback task")
-parser.add_argument("--updatetype", type=str, default="PR-PS",
-                    help="Choose data update type: PR-PS, P-S, R-S (start-end, R:Random, P:Positive, S:Synthetic)")
-parser.add_argument("--revise", type=str, default=None,
-                    help="Choose revised data type: red, shuf, rep, rev (red_shuf_rep_rev or red_shuf_rep or red or shuf_rep or None)")
+parser.add_argument("--ut", type=str, default="PR-PS",
+                    help="Choose data update type: PR-PS, P-PS, R-S (start-end, R:Random, P:Positive, S:Synthetic)")
+parser.add_argument("--rev", type=str, default=None,
+                    help="Choose revd data type: red, shuf, rep, rev (red-shuf-rep-revr or red-shuf-rep or red or shuf-rep or None)")
 parser.add_argument("--generator_model", type=str,
                     default="Gen_Lin_Block", help="choose generator model")
 parser.add_argument("--discriminator_model", type=str,
@@ -53,24 +55,26 @@ parser.add_argument("--optimizer", type=str,
                     default="Adam", help="choose optimizer")
 parser.add_argument("--motif",  action='store_true',
                     help="choose whether or not you want to include motif restriction. Default:False, place --motif if you want it to be True.")
-parser.add_argument("--fb_ep", type=float, default=0.25,
-                    help="percentage of epochs to feedback. e.g: if fb_ep:0.2 and epoch:100, first 80 epochs feedforward and last 20 epochs feedback")
-parser.add_argument("--fbpr", type=float, default=0.5,
-                    help="proportion of positive seqs to feedback. e.g: if fbpr:0.2 and are 100 positive seqs, 20 of them are picked randomly from the positive seqs and are feedbacked, the rest (80) are picked randomly from non-positive seqs")
-parser.add_argument("--mutatepr", type=float, default=0,
-                    help="proportion of mutate for generator. e.g: if mutatepr:0.1, 10 percent of generated seqs are mutated")
+parser.add_argument("--fe", type=float, default=0.25,
+                    help="percentage of epochs to feedback. e.g: if fe:0.2 and epoch:100, first 80 epochs feedforward and last 20 epochs feedback")
+parser.add_argument("--fp", type=float, default=0.5,
+                    help="proportion of positive seqs to feedback. e.g: if fp:0.2 and are 100 positive seqs, 20 of them are picked randomly from the positive seqs and are feedbacked, the rest (80) are picked randomly from non-positive seqs")
+parser.add_argument("--mp", type=float, default=0,
+                    help="proportion of mutate for generator. e.g: if mp:0.1, 10 percent of generated seqs are mutated")
 
 opt = parser.parse_args()
 classification = opt.classification
 fbtype = opt.fbtype
-updatetype = opt.updatetype
+ut = opt.ut
 generator_model = opt.generator_model
 discriminator_model = opt.discriminator_model
 optimizer = opt.optimizer
-run_name_dir = "t" + updatetype + "_" + "fe" + \
-    str(opt.fb_ep) + "_" + "fp" + \
-    str(opt.fbpr) + "_" + "mp" + str(opt.mutatepr) + \
-    "_" + "rev" + str(opt.revise) + "/"
+if opt.fe == 0.0:
+    opt.fp = opt.mp = "-"
+run_name_dir = "t" + ut + "_" + "fe" + \
+    str(opt.fe) + "_" + "fp" + \
+    str(opt.fp) + "_" + "mp" + str(opt.mp) + \
+    "_" + "rev" + str(opt.rev) + "/"
 # + "_" + "ep" + str(opt.epoch) + "_" + "ba" + str(opt.batch) + "_" + "lr" + \
 # str(opt.lr) + "_" + "pc" + str(opt.preds_cutoff) + "_" + "gen" + \
 # generator_model + "_" + "dis" + discriminator_model + "/"  # kari
@@ -78,17 +82,16 @@ figure_dir = opt.figure_dir
 if not os.path.exists(figure_dir + run_name_dir):
     os.makedirs(figure_dir + run_name_dir)
 use_cuda = True if torch.cuda.is_available() else False
-print(use_cuda)
+print(run_name_dir)
 Tensor = torch.cuda.FloatTensor if use_cuda else torch.FloatTensor
-fbepoch = opt.epoch - (opt.epoch * opt.fb_ep)
+fbepoch = opt.epoch - (opt.epoch * opt.fe)
 out_dim = 2
 in_dim_esm = 768  # kari
 
 
 def train_model():
     dataset, seq_nparr, label_nparr, rand_seqs, max_len, amino_num, a_list, motif_list = load_data(
-        updatetype, classification, opt.motif, revise=opt.revise)  # numpy.ndarray
-    print(a_list, motif_list, max_len)
+        ut, classification, opt.motif, revise=opt.rev, data_size=opt.data_size)  # numpy.ndarray
     # print("=========", seq_nparr.shape, max_len)
     # if nofb == True, dataset and seq_nparr must be random amino, not AVP
     # ['D', 'L', 'G', 'P', 'I', 'S', 'E', 'R', 'V', 'T', 'N', 'A', 'K', 'H', 'Q', 'M', 'Y', 'F', 'W', 'C', 'Z']
@@ -99,11 +102,15 @@ def train_model():
     #       amino_num, len(label_nparr), a_list)
     in_dim = max_len*amino_num
 
-    if updatetype == "PR-PS":
+    if ut == "PR-PS":
         pos_size = np.count_nonzero(label_nparr == 1)
         rand_num = len(label_nparr) - pos_size  # random data size
         order_label = [opt.epoch+100]*pos_size  # 100: could be any big number
         order_label += [0]*rand_num
+        order_label = np.array(order_label)
+    if ut == "P-PS":  # kari
+        # 100: could be any big number
+        order_label = [opt.epoch+100]*len(label_nparr)
         order_label = np.array(order_label)
     else:
         order_label = np.zeros(len(label_nparr))
@@ -135,7 +142,7 @@ def train_model():
                 sample_itr, opt.batch, max_len, amino_num, G, a_list, motif_list)
             # add certain amount of mutation to fight mode collapse
             mutated_sampled_seqs = mutate_seqs(
-                sampled_seqs, opt.mutatepr, a_list)
+                sampled_seqs, opt.mp, a_list)
             best_g_err, best_epoch = write_samples(
                 mutated_sampled_seqs, epoch, best_epoch, g_err_tmp, best_g_err, run_name_dir, a_list, motif_list)
 
@@ -151,22 +158,29 @@ def train_model():
 
             if pos_seqs:
                 mixed_pos_seq = soften_pos_seq(
-                    pos_seqs, rand_seqs, opt.fbpr)  # add certain amount of neg data to fight mode collapse
-                print(mixed_pos_seq)
+                    pos_seqs, rand_seqs, opt.fp)  # add certain amount of neg data to fight mode collapse
                 pos_nparr = str2tensor(
                     mixed_pos_seq, a_list, motif_list, max_len, output=False)
             else:
                 pos_nparr = []
 
-            print("NUMBER OF POSITIVE SEQUENCES: ", len(pos_nparr)*opt.fbpr)
-            pos_num.append(len(pos_nparr)*opt.fbpr)
+            print("NUMBER OF POSITIVE SEQUENCES: ", len(pos_nparr)*opt.fp)
+            pos_num.append(len(pos_nparr)*opt.fp)
 
-            dataset, seq_nparr, order_label = update_data(
-                pos_nparr, seq_nparr, order_label, label_nparr, epoch)
+            if ut == "P-PS":  # kari
+                dataset, seq_nparr, order_label = update_data_ps(
+                    pos_nparr, seq_nparr, order_label, label_nparr, epoch, opt.data_size)
+
+            else:
+                dataset, seq_nparr, order_label = update_data(
+                    pos_nparr, seq_nparr, order_label, label_nparr, epoch)
+            print(len(seq_nparr))
+
             dataloader = torch.utils.data.DataLoader(
                 dataset, batch_size=opt.batch, shuffle=False, drop_last=True)
 
         for i, (data, _) in enumerate(dataloader):
+            # print(vars(vars(dataloader)['dataset']))
             real_data = Variable(data.type(Tensor))
             D.zero_grad()
 
@@ -219,16 +233,16 @@ def train_model():
                     .format(epoch+1, i, (d_err.data).cpu().numpy(),
                             (g_err.data).cpu().numpy(), ((torch.mean(d_real_pred) - torch.mean(d_fake_pred)).data).cpu().numpy(), gp_np)
                 print(summary_str)
-                plot_losses([G_losses, D_losses], ["gen", "disc"],
-                            figure_dir + run_name_dir + "losses.png")
-                plot_losses([W_dist], ["w_dist"], figure_dir +
-                            run_name_dir + "dist.png")
-                plot_losses([grad_penalties], ["grad_penalties"],
-                            figure_dir + run_name_dir + "grad.png")
-                plot_losses([d_fake_losses, d_real_losses], [
-                            "d_fake", "d_real"], figure_dir + run_name_dir + "d_loss_components.png")
-                plot_losses([pos_num], ["pos_num"],
-                            figure_dir + run_name_dir + "positive_numbers.png")
+                make_plot([G_losses, D_losses], ["gen", "disc"],
+                          figure_dir + run_name_dir + "losses.png")
+                make_plot([W_dist], ["w_dist"], figure_dir +
+                          run_name_dir + "dist.png")
+                make_plot([grad_penalties], ["grad_penalties"],
+                          figure_dir + run_name_dir + "grad.png")
+                make_plot([d_fake_losses, d_real_losses], [
+                    "d_fake", "d_real"], figure_dir + run_name_dir + "d_loss_components.png")
+                make_plot([pos_num], ["pos_num"],
+                          figure_dir + run_name_dir + "positive_numbers.png")
         if epoch < fbepoch:
             g_fake_data_all = g_fake_data_all.reshape(
                 -1, max_len, amino_num)

@@ -5,9 +5,10 @@ from modlamp.descriptors import GlobalDescriptor
 import statistics
 from sklearn.manifold import TSNE
 from implementations.translator import str2tensor
+import seaborn as sns
 
 
-def plot_losses(losses_list, legends_list, file_out):
+def make_plot(losses_list, legends_list, file_out):
     assert len(losses_list) == len(legends_list)
     for i, loss in enumerate(losses_list):
         plt.plot(loss, label=legends_list[i])
@@ -124,10 +125,9 @@ def makeintlistdic_from_allep(dir_name, run_dir):
                     seq.hydrophobic_ratio()
                     hyd_list_ep.append(seq.descriptor[0][0])
                     seq_size += 1
-
-                len_ave_list.append(round(len(len_list_ep)/seq_size, 3))
-                pi_ave_list.append(round(len(pi_list_ep)/seq_size, 3))
-                hyd_ave_list.append(round(len(hyd_list_ep)/seq_size, 3))
+                len_ave_list.append(round(sum(len_list_ep)/seq_size, 3))
+                pi_ave_list.append(round(sum(pi_list_ep)/seq_size, 3))
+                hyd_ave_list.append(round(sum(hyd_list_ep)/seq_size, 3))
                 len_var_list.append(
                     round(statistics.pvariance(len_list_ep), 3))
                 pi_var_list.append(round(statistics.pvariance(pi_list_ep), 3))
@@ -138,12 +138,12 @@ def makeintlistdic_from_allep(dir_name, run_dir):
         else:
             break
 
-    intlistdic["len_ave"] = len_ave_list
-    intlistdic["pi_ave"] = pi_ave_list
-    intlistdic["hyd_ave"] = hyd_ave_list
-    intlistdic["len_var"] = len_var_list
-    intlistdic["pi_var"] = pi_var_list
-    intlistdic["hyd_var"] = hyd_var_list
+    intlistdic["Average Lengths"] = len_ave_list
+    intlistdic["Average Isoelectric Point"] = pi_ave_list
+    intlistdic["Average Hydrophobicity"] = hyd_ave_list
+    intlistdic["Variance of Length"] = len_var_list
+    intlistdic["Variance of Isoelectric Point"] = pi_var_list
+    intlistdic["Variance of Hydrophobicity"] = hyd_var_list
     # print(intlistdic, len(len_ave_list))
 
     return intlistdic
@@ -154,25 +154,62 @@ def makeplot_from_intlistdic(intlistdic, eval_dir, run_dir):
     INPUT
     intlistdic: dic(list)
     """
+    # sns.set()
     for k, lis in intlistdic.items():
-        with open(eval_dir + run_dir + k + "_allepoch.txt", "w") as f:
+        with open(eval_dir + run_dir + k + ".txt", "w") as f:
             strlis = [str(l) for l in lis]
             f.write("\n".join(strlis))
         plt.figure()
         plt.plot([i for i in range(1, len(lis)+1)], lis)
-        plt.savefig(eval_dir + run_dir + k + "_allepoch.png")
+        plt.savefig(eval_dir + run_dir + k + ".png")
+        # sns_plot = sns.lineplot(x="epoch", y=k, data=lis)
+        # sns_plot.savefig(eval_dir + run_dir + k + ".png")
 
     return
 
 
-def makesummary_from_file(eval_dir, run_dirs, var_file_list, last_ep):
+# def makeavelist_from_intlistdic(int_list_dic, var_row_list, last_ep):
+#     """
+#     INPUT
+#     int_list_dic: dic{str:list(float)}
+#     var_row_list: list(str)
+#     last_ep: int
+
+#     OUTPUT
+#     [str] (ex. [modes, "0.05", ...])
+#     """
+
+#     for var_list in int_list_dic:
+#         tmp = var_list[-last_ep:]
+#         var_row_list.append(sum(tmp)/len(tmp))
+
+#     return var_row_list
+
+
+def makesummary_from_list(file_path, header_list, row_list):
+    """
+    INPUT
+    file_path: str
+    header_list, row_list: list[str]
+    """
+    with open(file_path, "w") as f:
+        f.write("\t".join(header_list))
+        f.write("\t".join(row_list))
+    return
+
+
+def makesummary_from_file(eval_dir, run_dirs, file_list, last_ep, file_name, options):
     var_dic = {}
+    header_list = []
+
+    for op in options:
+        header_list.append(op)
+    for file in file_list:
+        header_list.append(file)
 
     for run_dir in run_dirs:
         run_var_list = []
-        header_list = [""]
-        for file in var_file_list:
-            header_list.append(file)
+        for file in file_list:
             last_preds_list = []
             with open(eval_dir + run_dir + "/" + file + ".txt") as f:
                 for line in f:
@@ -181,12 +218,18 @@ def makesummary_from_file(eval_dir, run_dirs, var_file_list, last_ep):
             run_var_list.append(sum(tmp)/len(tmp))
         var_dic[run_dir] = run_var_list
 
-    with open(eval_dir + "/var_summary.txt", "w") as f:
+    with open(eval_dir + "/" + file_name+"_summary.txt", "w") as f:
         f.write("\t".join(header_list))
         f.write("\n")
         for dir, var_list in var_dic.items():
-            tmp = [dir, "\t", str(var_list[0]), "\t", str(
-                var_list[1]), "\t", str(var_list[2]), "\n"]
+            for op in options:
+                dir = dir.replace(op, "")
+            dir = dir.replace("/", "")
+            div_run_dir_list = dir.split("_")
+
+            mode = "\t".join(div_run_dir_list)
+            tmp = [mode, "\t", str(round(var_list[0], 3)), "\t", str(
+                round(var_list[1], 3)), "\t", str(round(var_list[2], 3)), "\n"]
             f.write("".join(tmp))
 
 
@@ -211,7 +254,6 @@ def maketsne_from_file(file_list, eval_dir):
 
         else:
             #seq_numpy = seq_numpy[:len(real_seq_numpy)]
-            print(seq_numpy.shape, real_seq_numpy.shape)
             print("Creating T-SNE:", run_dir)
             # , "blue", "orange", "purple", "brown", "fuchsia", "grey", "olive", "lightblue"]
             colors = ["red", "green"]

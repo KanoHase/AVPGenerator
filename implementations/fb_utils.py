@@ -89,6 +89,32 @@ def update_data(pos_nparr, seq_nparr, order_label, label_nparr, epoch):
     return dataset, seq_nparr, order_label
 
 
+def update_data_ps(pos_nparr, seq_nparr, order_label, label_nparr, epoch, data_size):
+    if len(seq_nparr) == data_size:
+        dataset, seq_nparr, order_label = update_data(
+            pos_nparr, seq_nparr, order_label, label_nparr, epoch)
+        return dataset, seq_nparr, order_label
+
+    else:
+        if data_size < len(pos_nparr) + len(seq_nparr):
+            # just one epoch before the data reach up to data_size
+            pos_num = data_size-len(seq_nparr)
+            seq_nparr = np.concatenate([seq_nparr, pos_nparr[:pos_num]])
+        elif len(pos_nparr) > 0:
+            pos_num = len(pos_nparr)
+            seq_nparr = np.concatenate([seq_nparr, pos_nparr])
+        else:
+            pos_num = len(pos_nparr)
+            seq_nparr = seq_nparr
+        order_label = np.concatenate(
+            [order_label, np.repeat(epoch, pos_num)])
+        perm = np.random.permutation(len(seq_nparr))
+        seq_nparr = np.array([seq_nparr[i] for i in perm])
+        order_label = order_label[perm]
+        dataset = to_dataloader(seq_nparr, label_nparr)
+        return dataset, seq_nparr, order_label
+
+
 def remove_old_seq(order_label, seq_nparr, num_to_add):
     to_remove = np.argsort(order_label)[:num_to_add]
     seq_nparr = np.array(

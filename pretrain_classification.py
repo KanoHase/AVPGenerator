@@ -2,7 +2,7 @@ import argparse
 import os
 
 from implementations.data_utils import load_data_classify, load_data_esm, to_dataloader
-from implementations.afterprocess import plot_losses, write_samples
+from implementations.afterprocess import make_plot, write_samples
 from esm_master.initialize_esm import gen_repr
 from models import *
 
@@ -21,7 +21,7 @@ parser.add_argument("--batch", type=int, default=64,
 parser.add_argument("--show_loss", type=int, default=5,
                     help="number of epochs of showing loss")
 parser.add_argument("--show_test_result", type=int,
-                    default=100, help="number of epochs of showing loss")
+                    default=10, help="number of epochs of showing loss")
 parser.add_argument("--lr", type=int, default=0.02, help="learning rate")
 parser.add_argument("--figure_dir", type=str,
                     default="./figures/", help="directory name to put figures")
@@ -105,6 +105,7 @@ def train_model():
 
     train_loss = []
     train_accu = []
+    test_accu = []
 
     if use_cuda:
         model = model.cuda()
@@ -152,6 +153,9 @@ def train_model():
 
             print('Test Step: {}\tAccuracy: {:.3f}'.format(
                 int(epoch/opt.show_test_result), accuracy_v))
+            test_accu.append(accuracy_v)
+            make_plot([test_accu], ["Pretraining Test Accuracy"],
+                      figure_dir + "pretrain_accu.png")
 
 
 def main():

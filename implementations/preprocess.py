@@ -11,11 +11,11 @@ parser = argparse.ArgumentParser()
 parser.add_argument("--red",  action='store_true',
                     help="choose whether or not you want to reduce data. Default:False, place --reduce if you want it to be True.")
 parser.add_argument("--shuf",  action='store_true',
-                    help="choose whether or not you want to augment data with shuffled data. Default:False, place --rev if you want it to be True.")
+                    help="choose whether or not you want to augment data with shuffled data. Default:False, place --revr if you want it to be True.")
 parser.add_argument("--rep",  action='store_true',
                     help="choose whether or not you want to augment data with replaced amino acid. Default:False, place --rep if you want it to be True.")
-parser.add_argument("--rev",  action='store_true',
-                    help="choose whether or not you want to augment data with reversed amino acid. Default:False, place --rev if you want it to be True.")
+parser.add_argument("--revr",  action='store_true',
+                    help="choose whether or not you want to augment data with reversed amino acid. Default:False, place --revr if you want it to be True.")
 parser.add_argument("--sim", type=float, default=0.6,
                     help="number of epochs of training")
 opt = parser.parse_args()
@@ -26,7 +26,7 @@ real_pos_file = "positive"
 real_pos_val_file = "val_positive"
 real_neg_file = "negative_noexp"
 real_neg_val_file = "val_negative_noexp"
-opt_dic = {"red": opt.red, "shuf": opt.shuf, "rep": opt.rep, "rev": opt.rev}
+opt_dic = {"red": opt.red, "shuf": opt.shuf, "rep": opt.rep, "revr": opt.rev}
 filename_end = ""
 for k, v in opt_dic.items():
     if v == True:
@@ -50,7 +50,7 @@ def reduce(file_list):
                     pre = seq
 
 
-def augment_data(file_list, red, shuf, rep, rev):
+def augment_data(file_list, red, shuf, rep, revr):
     seq_lis = []
     rep_dic = {'A': 'V', 'V': 'A', 'S': 'T', 'T': 'S', 'F': 'Y', 'Y': 'F', 'K': 'R', 'R': 'K',
                'C': 'M', 'M': 'C', 'D': 'E', 'E': 'D', 'N': 'Q', 'Q': 'N', 'V': 'I', 'I': 'V'}
@@ -106,7 +106,7 @@ def augment_data(file_list, red, shuf, rep, rev):
                 row.append(repseq)
                 rep_flag = False
 
-            if rev:
+            if revr:
                 revseq = seq[::-1]
                 revseq = revseq + "\n"
                 row.append(revseq)
@@ -124,7 +124,7 @@ def main():
     if opt.red:
         reduce(file_list)
     if opt.shuf or opt.rep:
-        augment_data(file_list, opt.red, opt.shuf, opt.rep, opt.rev)
+        augment_data(file_list, opt.red, opt.shuf, opt.rep, opt.revr)
 
 
 if __name__ == '__main__':
