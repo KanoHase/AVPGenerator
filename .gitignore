@@ -1,8 +1,8 @@
 /__pycache__/
 /.vector_cache/
-/figures/
-/samples/
-/subsamples/
+/figures*/
+/samples*/
+/subsamples*/
 /samples_fasta/
 data/*.tsv
 data/*.vec
@@ -10,8 +10,7 @@ data/*.vec
 data_fbgan/input/input*
 data_fbgan/output/output*
 /checkpoint/
-/eval/
-/eval_/
+/eval*/
 /others/
 /dna_to_amino.py
 /FBGAN_MetaiAVP_main.py

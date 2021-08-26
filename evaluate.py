@@ -2,7 +2,7 @@ import os
 import pandas as pd
 import numpy as np
 from propy import PyPro
-# # check: https://propy3.readthedocs.io/en/latest/PyPro.html
+# check: https://propy3.readthedocs.io/en/latest/PyPro.html
 from modlamp.descriptors import GlobalDescriptor
 import argparse
 
@@ -11,11 +11,13 @@ parser.add_argument("--allepoch", action='store_true',
                     help="choose whether or not you want to evaluate all epoch's transition. Place --allepoch if you need evaluation for all epoch's transition.")
 opt = parser.parse_args()
 
-data_dir = "./data/"
+data_dir = "./real_data/"
 samples_dir = "./samples/"
 eval_dir = "./eval/"
-real_file = "val_positive"
+real_pos_file = "val_positive"
+real_neg_file = "val_negative_exp"
 gen_file = "100.txt"
+sub_gen_file = "99.txt"
 options = ["ut", "fe", "fp", "mp", "rev"]
 task_list = ["Length", "Isoelectric Point", "Hydrophobicity"]
 std_task_list = ["Standard Deviation of Length",
@@ -24,7 +26,7 @@ if not os.path.exists(eval_dir):
     os.mkdir(eval_dir)
 
 
-def real_data_process(real_path):
+def real_data_process(real_path, real_file):
     real_seq_list = []
 
     with open(real_path) as f:
@@ -45,6 +47,16 @@ def real_data_process(real_path):
     return real_ave_std_df, prop_real, std_real
 
 
+def make_seq_list(path):
+    seq_list = []
+
+    with open(path) as f:
+        for line in f:
+            seq = line[:-1]
+            seq_list.append(seq)
+    return seq_list
+
+
 def calc_prop(seq_list, task_list):
     prop_array = []
     glob_seq = GlobalDescriptor(seq_list)
@@ -56,7 +68,7 @@ def calc_prop(seq_list, task_list):
             glob_seq.isoelectric_point()
         if task == "Hydrophobicity":
             glob_seq.hydrophobic_ratio()
-        if prop_array == []:
+        if len(prop_array) == 0:
             prop_array = glob_seq.descriptor
         else:
             prop_array = np.concatenate([prop_array, glob_seq.descriptor], 1)
@@ -77,6 +89,11 @@ def avestd_from_df(prop_df):
     ave_std_df = ave_std_df_tmp.set_axis(
         ["Average", "Standard Deviation"], axis=1)
     return ave_std_df.T
+
+
+def var_from_df(prop_df):
+    var_df = prop_df.var()
+    return var_df
 
 
 def calc_sim_rate(norm_prop_df, threshold):
@@ -168,8 +185,8 @@ def dic_to_file(header, real_data, options, dic, path):
         f.write("\n")
 
         # write real data
-        row = ["-" for _ in range(len(options))] + [str(round(val, 3))
-                                                    for val in real_data] + ["-"]
+        row = [real_pos_file.replace("_", "-")] + ["-" for _ in range(len(options)-1)] + [str(round(val, 3))
+                                                                                          for val in real_data] + ["-"]
         f.write("\t".join(row))
 
         # sort by the last index of the vals of other data
@@ -177,19 +194,59 @@ def dic_to_file(header, real_data, options, dic, path):
 
         # write other data
         for k, lis in dic:
-            for op in options:
-                k = k.replace(op, "")
-            k = "\n" + k
-            row = k.split("_") + [str(round(val, 3)) for val in lis]
+            if k == real_neg_file:
+                f.write('\n')
+                row = [real_neg_file.replace("_", "-")] + ["-" for _ in range(len(options)-1)] + \
+                    [str(round(val, 3)) for val in lis]
+            else:
+                for op in options:
+                    k = k.replace(op, "")
+                k = "\n" + k
+                row = k.split("_") + [str(round(val, 3)) for val in lis]
 
             f.write("\t".join(row))
     return
 
 
+def make_prop_dic(prop_dic, seq_list, real_ave_std_df, dir_name):
+    # calculate each run_dir/100.txt's prop
+    prop_df = calc_prop(seq_list, task_list)
+
+    # normalize each run_dir/100.txt's prop using real average and std
+    norm_prop_df = norm_prop(prop_df, real_ave_std_df)
+
+    # gives distance between gen and real prop
+    sim_rate = calc_sim_rate(norm_prop_df, 1.5)
+
+    # calculate each run_dir/100.txt's prop's average and std
+    rundir_ave_std_df = avestd_from_df(prop_df)
+
+    # rundir_ave_std_df[Length, Isoelectric Point, Hydrophobicity], sim_rate
+    prop_summary_list = rundir_ave_std_df.loc["Average"].values.tolist(
+    ) + [sim_rate]
+    prop_dic[dir_name] = prop_summary_list
+    return prop_dic, norm_prop_df, rundir_ave_std_df
+
+
+def make_std_dic(std_dic, norm_prop_df, rundir_ave_std_df, dir_name):
+    # calculate variance of norm prop
+    var_df = var_from_df(norm_prop_df)
+
+    # average of variance
+    ave_of_var = np.mean(var_df.values.tolist())
+
+    # rundir_ave_std_df[Length, Isoelectric Point, Hydrophobicity], ave_of_var
+    std_summary_list = rundir_ave_std_df.loc["Standard Deviation"].values.tolist(
+    )
+    std_summary_list.append(ave_of_var)
+    std_dic[dir_name] = std_summary_list
+    return std_dic
+
+
 def main():
-    # calculate real data's average and std
+    # calculate real pos and neg data's average and std
     real_ave_std_df, prop_real, std_real = real_data_process(
-        data_dir+real_file+".txt")
+        data_dir+real_pos_file+".txt", real_pos_file)
 
     run_dirs = os.listdir(samples_dir)
 
@@ -197,53 +254,39 @@ def main():
     prop_dic = {}
 
     std_header = options + std_task_list + \
-        ["Average Standard Deviation (Normalized)"]
+        ["Average Variance (Normalized)"]
     std_dic = {}
 
     for run_dir in run_dirs:
         if opt.allepoch:
             allepoch_transition(samples_dir, eval_dir, task_list, run_dir)
 
-        seq_list = []
+        if not os.path.exists(samples_dir+run_dir+"/"+gen_file):
+            gen_dir = samples_dir+run_dir+"/"+sub_gen_file
+        else:
+            gen_dir = samples_dir+run_dir+"/"+gen_file
 
-        with open(samples_dir+run_dir+"/"+gen_file) as f:
-            for line in f:
-                seq = line[:-1]
-                seq_list.append(seq)
+        seq_list = make_seq_list(gen_dir)
 
-        # calculate each run_dir/100.txt's prop
-        prop_df = calc_prop(seq_list, task_list)
+        prop_dic, norm_prop_df, rundir_ave_std_df = make_prop_dic(
+            prop_dic, seq_list, real_ave_std_df, run_dir)
 
-        # normalize each run_dir/100.txt's prop using real average and std
-        norm_prop_df = norm_prop(prop_df, real_ave_std_df)
-
-        # gives distance between gen and real prop
-        sim_rate = calc_sim_rate(norm_prop_df, 1.5)
-
-        # calculate each run_dir/100.txt's prop's average and std
-        rundir_ave_std_df = avestd_from_df(prop_df)
-
-        # rundir_ave_std_df[Length, Isoelectric Point, Hydrophobicity], sim_rate
-        prop_summary_list = rundir_ave_std_df.loc["Average"].values.tolist(
-        ) + [sim_rate]
-        prop_dic[run_dir] = prop_summary_list
-
-        # calculate std of norm prop
-        norm_ave_std_df = avestd_from_df(norm_prop_df)  # kari
-        # average of std #kari
-        ave_of_std = np.mean(
-            norm_ave_std_df.loc["Standard Deviation"].values.tolist())
-
-        # rundir_ave_std_df[Length, Isoelectric Point, Hydrophobicity], ave_of_std
-        std_summary_list = rundir_ave_std_df.loc["Standard Deviation"].values.tolist(
-        )
-        std_summary_list.append(ave_of_std)
-        std_dic[run_dir] = std_summary_list
+        std_dic = make_std_dic(std_dic, norm_prop_df,
+                               rundir_ave_std_df, run_dir)
 
         # calculate and write each run_dir/100.txt's aacomp
         if not os.path.exists(eval_dir+run_dir+"/"):
             os.mkdir(eval_dir+run_dir+"/")
         calc_write_aacomp(seq_list, eval_dir+run_dir+"/aacomp.txt")
+
+    # real negative data
+    seq_list = make_seq_list(data_dir+real_neg_file+".txt")
+
+    prop_dic, norm_prop_df, rundir_ave_std_df = make_prop_dic(
+        prop_dic, seq_list, real_ave_std_df, real_neg_file)
+
+    std_dic = make_std_dic(std_dic, norm_prop_df,
+                           rundir_ave_std_df, real_neg_file)
 
     dic_to_file(prop_header, prop_real, options,
                 prop_dic, eval_dir+"/properties.txt")

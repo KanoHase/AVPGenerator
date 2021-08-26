@@ -1,15 +1,28 @@
 import numpy as np
 import re
 import rstr
+import os
 
 from sklearn.preprocessing import OneHotEncoder
 import pandas as pd
 
 
 def text2fasta(file_list, fasta_dir):
+    '''
+    INPUT
+    file_list:list(list(dir, file_name))
+    fasta_dir = str
+    '''
+    if not os.path.exists(fasta_dir):
+        os.makedirs(fasta_dir)
+
     for dir, p_file in file_list:
-        with open(dir + p_file + ".txt") as f:
-            with open(fasta_dir + p_file + ".fasta", "w") as g:
+        input_path = dir + p_file if ".txt" in p_file else dir + p_file + ".txt"
+        with open(input_path) as f:
+            output_path = fasta_dir + \
+                p_file.replace(
+                    '.txt', '.fasta') if ".txt" in p_file else fasta_dir + p_file + ".fasta"
+            with open(output_path, "w") as g:
                 i = 1
                 for line in f:
                     tmp = ">" + str(i) + "\n" + line[:-1] + "\n"
@@ -40,8 +53,6 @@ def tensor2str(seq_tensor, a_list, motif_list, output=True):
         aa_samples.append(seq_str)
 
     return aa_samples
-
-# text2fasta(["positive", "negative_noexp"])
 
 
 def str2tensor(seq_str, a_list, motif_list, max_len, output=False):

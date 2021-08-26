@@ -1,5 +1,6 @@
 import argparse
 import os
+import numpy as np
 
 from implementations.data_utils import load_data_classify, load_data_esm, to_dataloader
 from implementations.afterprocess import make_plot, write_samples
@@ -33,8 +34,10 @@ parser.add_argument("--optimizer", type=str,
                     default="SGD", help="choose optimizer")
 parser.add_argument("--motif", action='store_true',
                     help="choose whether or not you want to include motif restriction. Default:False, place --motif if you want it to be True. WARNING: cannot be used with notransformer option")
-parser.add_argument("--revise",  action='store_true',
-                    help="choose whether or not you want to revise data. Default:False, place --revise if you want it to be True.")
+# parser.add_argument("--revise",  action='store_true',
+#                     help="choose whether or not you want to revise data. Default:False, place --revise if you want it to be True.")
+parser.add_argument("--revise", type=str, default=None,
+                    help="Choose revd data type: red, shuf, rep, revr (red-shuf-rep-revr or red-shuf-rep or red or shuf-rep or None)")
 parser.add_argument("--notransformer", action='store_false',
                     help="choose whether or not you want to use transformer representation. Default:True, place --notransformer if you do not want transformer.")
 
@@ -43,9 +46,12 @@ classification = opt.classification
 classifier_model = opt.classifier_model
 transformer = opt.notransformer
 figure_dir = opt.figure_dir
+if not os.path.exists(figure_dir):
+    os.makedirs(figure_dir)
 use_cuda = True if torch.cuda.is_available() else False
 Tensor = torch.cuda.FloatTensor if use_cuda else torch.FloatTensor
 checkpoint_dir = "./checkpoint/classification/"
+accuracy_txt = "pretrain_accuracy.txt"
 if not os.path.exists(checkpoint_dir):
     os.makedirs(checkpoint_dir)
 
@@ -55,6 +61,8 @@ def load_data_pretrain(transformer):
         train_data_esm, val_data_esm, train_label_nparr, val_label_nparr = load_data_esm(
             revise=opt.revise)
         # data_esm: [('1079', 'ALVGATFGCGVPTI')...]
+        # print(len(train_data_esm), len(val_data_esm),
+        #       np.count_nonzero(train_label_nparr == 1), np.count_nonzero(val_label_nparr == 1))
         train_seq_nparr = gen_repr(train_data_esm)
         val_seq_repr = gen_repr(val_data_esm)
 
@@ -153,9 +161,19 @@ def train_model():
 
             print('Test Step: {}\tAccuracy: {:.3f}'.format(
                 int(epoch/opt.show_test_result), accuracy_v))
+            accuracy_v = accuracy_v.to('cpu').detach().numpy().copy()
             test_accu.append(accuracy_v)
-            make_plot([test_accu], ["Pretraining Test Accuracy"],
-                      figure_dir + "pretrain_accu.png")
+            if opt.revise:
+                make_plot([test_accu], ["Pretraining Test Accuracy"],
+                          figure_dir + "pretrain_accuracy-"+opt.revise+".png")
+
+            else:
+                make_plot([test_accu], ["Pretraining Test Accuracy"],
+                          figure_dir + "pretrain_accuracy.png")
+
+    with open(figure_dir + accuracy_txt, 'w') as f:
+        for accu in test_accu:
+            f.write("".join([str(float(accu)), '\n']))
 
 
 def main():

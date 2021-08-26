@@ -44,7 +44,7 @@ parser.add_argument("--fbtype", type=str, default="Transformer",
 parser.add_argument("--ut", type=str, default="PR-PS",
                     help="Choose data update type: PR-PS, P-PS, R-S (start-end, R:Random, P:Positive, S:Synthetic)")
 parser.add_argument("--rev", type=str, default=None,
-                    help="Choose revd data type: red, shuf, rep, rev (red-shuf-rep-revr or red-shuf-rep or red or shuf-rep or None)")
+                    help="Choose revd data type: red, shuf, rep, revr (red-shuf-rep-revr or red-shuf-rep or red or shuf-rep or None)")
 parser.add_argument("--generator_model", type=str,
                     default="Gen_Lin_Block", help="choose generator model")
 parser.add_argument("--discriminator_model", type=str,
@@ -71,7 +71,7 @@ discriminator_model = opt.discriminator_model
 optimizer = opt.optimizer
 if opt.fe == 0.0:
     opt.fp = opt.mp = "-"
-run_name_dir = "t" + ut + "_" + "fe" + \
+run_name_dir = "ut" + ut + "_" + "fe" + \
     str(opt.fe) + "_" + "fp" + \
     str(opt.fp) + "_" + "mp" + str(opt.mp) + \
     "_" + "rev" + str(opt.rev) + "/"

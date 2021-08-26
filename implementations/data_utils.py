@@ -7,20 +7,27 @@ import re
 import torch
 import torchvision.transforms as transforms
 
-data_dir = "./data/"
-multi_data_file = "positive_data.txt"
-binary_positive_data_file = "positive.txt"
-# binary_positive_revised_data_file = "positive_revised.txt"
+
+data_dir = "./real_data/"
+
 binary_negative_data_file = "negative_noexp.txt"
-binary_positive_val_data_file = "val_positive.txt"
 binary_negative_val_data_file = "val_negative_noexp.txt"
+
+# binary_negative_data_file = "negative_exp.txt"
+# binary_negative_val_data_file = "val_negative_exp.txt"
+
+
+binary_positive_data_file = "positive.txt"
+binary_positive_val_data_file = "val_positive.txt"
 random_data_file = "random_seq.txt"
 motif_data_file = "motif.txt"
+multi_data_file = "positive_data.txt"
+# binary_positive_revised_data_file = "positive_revised.txt"
 
 
 def load_data(updatetype, classification, motif, revise=None, data_size=None):  # Use this in WGANgp
     if revise:
-        binary_positive_revised_data_file = "positive_" + revise + ".txt"
+        binary_positive_revised_data_file = "positive-" + revise + ".txt"
 
     train_pos_dir = data_dir + binary_positive_revised_data_file if revise else data_dir + \
         binary_positive_data_file
@@ -69,7 +76,7 @@ def load_data_esm(sampled_seqs=None, revise=None):
     data_esm = []
     i = 1
     if revise:
-        binary_positive_revised_data_file = "positive_" + revise + ".txt"
+        binary_positive_revised_data_file = "positive-" + revise + ".txt"
 
     if sampled_seqs != None:  # expected to be used in pretraining
         for seq in sampled_seqs:
@@ -114,7 +121,7 @@ def load_data_esm(sampled_seqs=None, revise=None):
 
 def load_data_classify(classification, motif, revise=None):  # Use this in classification
     if revise:
-        binary_positive_revised_data_file = "positive_" + revise + ".txt"
+        binary_positive_revised_data_file = "positive-" + revise + ".txt"
 
     train_pos_dir = data_dir + binary_positive_revised_data_file if revise else data_dir + \
         binary_positive_data_file
