@@ -8,15 +8,11 @@ import torch
 import torchvision.transforms as transforms
 
 
-data_dir = "./real_data/"
+opt_name = input('Option name: ')
 
-binary_negative_data_file = "negative_noexp.txt"
-binary_negative_val_data_file = "val_negative_noexp.txt"
-
-# binary_negative_data_file = "negative_exp.txt"
-# binary_negative_val_data_file = "val_negative_exp.txt"
-
-
+data_dir = "./real_data_"+opt_name+"/"
+binary_negative_data_file = "negative.txt"
+binary_negative_val_data_file = "val_negatives.txt"
 binary_positive_data_file = "positive.txt"
 binary_positive_val_data_file = "val_positive.txt"
 random_data_file = "random_seq.txt"

@@ -16,7 +16,9 @@ All default arguments for demo are provided.
 
 3) Run `python WGANgp_main.py` or `zsh main.sh`to train WGAN with Gradient Penalty to produce valid gene sequences.
 
-3) Run `python evaluate.py` to evaluate the generated sequences.
+4) Run `python evaluate.py` to evaluate the generated sequences.
+
+5) After deciding which the optimal mode, run `python pairwise.py` to do pairwise alignment.
 
 ## Note
 - Data alteration

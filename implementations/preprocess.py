@@ -36,21 +36,32 @@ parser.add_argument("--max_seqlen", type=int, default=50,
                     help="maximum sequence length")
 opt = parser.parse_args()
 
-fasta_dir = "./real_data_fasta/"
 raw_data_dir = "./raw_data/"
-real_data_dir = "./real_data/"
 real_pos_file = "positive"
-real_pos_val_file = "val_positive"
-real_neg_file = "negative_noexp"
-real_neg_val_file = "val_negative_noexp"
+# real_pos_val_file = "val_positive"
+real_neg_file = "negative"
+real_neg_val_file = "val_negative"
 opt_dic = {"red": opt.red, "shuf": opt.shuf, "rep": opt.rep, "revr": opt.revr}
 filename_end = ""
+pos_opt = "posscreen"
+neg_opt = "negexpnoexp"
 non_a_list = ['B', 'J', 'O', 'U', 'X', 'Z']  # kari
 for k, v in opt_dic.items():
     if v == True:
         filename_end += "-" + k
+if opt.vir_min == 1:
+    pos_opt = "posnoscreen"
+if opt.selectv:
+    neg_opt = "negexp"
+if opt.noexp:
+    neg_opt = "negnoexp"
+
+real_data_dir = "./"+"_".join(["real_data", pos_opt, neg_opt]) + "/"
+real_fasta_dir = "./"+"_".join(["real_data_fasta", pos_opt, neg_opt]) + "/"
 if not os.path.exists(real_data_dir):
     os.mkdir(real_data_dir)
+if not os.path.exists(real_fasta_dir):
+    os.mkdir(real_fasta_dir)
 
 
 def reduce(file_list):
@@ -254,15 +265,17 @@ def screen_neg(input_dir, output_dir, neg_file_list, seqnum_dic, noexp):
         if "val" in k:
             # only one of the files will be chosen
             target_file = [file for file in neg_input_file if "val" in file]
+            out_negfile = real_neg_val_file + ".txt"
         else:
             # only one of the files will be chosen
             target_file = [
                 file for file in neg_input_file if "val" not in file]
+            out_negfile = real_neg_file + ".txt"
 
         df = pd.read_csv(input_dir+target_file[0], sep="\t")
         seq_list = df['Sequence'].tolist()
 
-        with open(output_dir+target_file[0], 'w') as f:
+        with open(output_dir+out_negfile, 'w') as f:
             neg_valid_num = 0
             for seq in seq_list:
                 invalid_flag = cut_invalid_seqs(seq, non_a_list)
@@ -287,6 +300,7 @@ def main():
     input_dir = raw_data_dir
     output_dir = real_data_dir
     input_file_list = os.listdir(input_dir)
+    print(input_file_list)
 
     pos_file_list = []
     neg_file_list = []
@@ -309,7 +323,8 @@ def main():
 
     real_file_list_tmp = os.listdir(real_data_dir)
     real_file_list = [[real_data_dir, file] for file in real_file_list_tmp]
-    text2fasta(real_file_list, fasta_dir)
+    text2fasta(real_file_list, real_fasta_dir)
+    print(real_data_dir)
 
 
 if __name__ == '__main__':

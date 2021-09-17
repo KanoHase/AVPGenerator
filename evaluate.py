@@ -9,13 +9,18 @@ import argparse
 parser = argparse.ArgumentParser()
 parser.add_argument("--allepoch", action='store_true',
                     help="choose whether or not you want to evaluate all epoch's transition. Place --allepoch if you need evaluation for all epoch's transition.")
+parser.add_argument("--noopt", action='store_true',
+                    help="choose whether or not you want to ignore option. Place --noopt if you want to ignore option.")
 opt = parser.parse_args()
 
-data_dir = "./real_data/"
-samples_dir = "./samples/"
-eval_dir = "./eval/"
+if not opt.noopt:
+    opt_name = input('Option name: ')
+
+data_dir = "./real_data_"+opt_name+"/"
+samples_dir = "./samples_"+opt_name+"/"
+eval_dir = "./eval_"+opt_name+"/"
 real_pos_file = "val_positive"
-real_neg_file = "val_negative_exp"
+real_neg_file = "val_negative"
 gen_file = "100.txt"
 sub_gen_file = "99.txt"
 options = ["ut", "fe", "fp", "mp", "rev"]
@@ -33,7 +38,6 @@ def real_data_process(real_path, real_file):
         for line in f:
             seq = line[:-1]
             real_seq_list.append(seq)
-
     prop_df = calc_prop(real_seq_list, task_list)
     real_ave_std_df = avestd_from_df(prop_df)
 
