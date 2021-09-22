@@ -1,22 +1,21 @@
 #!/usr/bin/zsh
 
-utarr=("PR-PS" "P-PS" "R-S")
-fearr=(0.25 0.5 0.75 1)
-fparr=(0.25 0.5 0.75 1)
-mparr=(0 0.1)
+# python3 implementations/preprocess.py
+# python3 pretrain_classification.py
+
+eparr=(50 75 100 150)
+baarr=(32 64 128)
+lrarr=(0.00001 0.0001 0.001)
+mparr=(0.7 0.8 0.9)
 #revarr=("red-shuf-rep-revr" "red-shuf-rep" "red" "shuf-rep")
 
-python3 WGANgp_main.py --ut "PR-PS" --fe 0
-python3 WGANgp_main.py --ut "P-PS" --fe 0
-python3 WGANgp_main.py --ut "R-S" --fe 0
-
-
-for i in ${utarr[@]}
-for j in ${fearr[@]}
-for k in ${fparr[@]}
+for i in ${eparr[@]}
+for j in ${baarr[@]}
+for k in ${lrarr[@]}
 for l in ${mparr[@]}
 #for m in ${revarr[@]}
+
 do
   # python3 pretrain_classification.py --revise $m
-  python3 WGANgp_main.py --ut $i --fe $j --fp $k --mp $l #--rev $m
+  python3 WGANgp_main.py --epoch $i --batch $j --lr $k --preds_cutoff $l #--rev $m
 done

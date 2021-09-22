@@ -7,9 +7,10 @@ real_pos_file = "val_positive"
 real_pos_train_file = "positive"
 sample_dir = "./samples_posscreen_negexpnoexp/utP-PS_fe0.75_fp0.5_mp0.0_revNone/"
 eval_dir = "./eval_posscreen_negexpnoexp/utP-PS_fe0.75_fp0.5_mp0.0_revNone/"
-file_name = "99.txt"
-result_file = "align_result.txt"
-align_file = "alignment.txt"
+file_num = '100'
+file_name = file_num+".txt"
+result_file = "align_result"+file_num+".txt"
+align_file = "alignment"+file_num+".txt"
 
 
 def make_seq_list(path):

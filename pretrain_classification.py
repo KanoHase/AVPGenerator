@@ -13,7 +13,7 @@ from torch.autograd import Variable
 import torch.optim as optim
 
 parser = argparse.ArgumentParser()
-parser.add_argument("--epoch", type=int, default=2000,
+parser.add_argument("--epoch", type=int, default=1000,
                     help="number of epochs of training")
 parser.add_argument("--hidden", type=int, default=512,
                     help="number of neurons in hidden layer")
@@ -21,8 +21,6 @@ parser.add_argument("--batch", type=int, default=64,
                     help="number of batch size")
 parser.add_argument("--show_loss", type=int, default=5,
                     help="number of epochs of showing loss")
-parser.add_argument("--show_test_result", type=int,
-                    default=10, help="number of epochs of showing loss")
 parser.add_argument("--lr", type=int, default=0.02, help="learning rate")
 parser.add_argument("--figure_dir", type=str,
                     default="./figures/", help="directory name to put figures")
@@ -34,8 +32,6 @@ parser.add_argument("--optimizer", type=str,
                     default="SGD", help="choose optimizer")
 parser.add_argument("--motif", action='store_true',
                     help="choose whether or not you want to include motif restriction. Default:False, place --motif if you want it to be True. WARNING: cannot be used with notransformer option")
-# parser.add_argument("--revise",  action='store_true',
-#                     help="choose whether or not you want to revise data. Default:False, place --revise if you want it to be True.")
 parser.add_argument("--revise", type=str, default=None,
                     help="Choose revd data type: red, shuf, rep, revr (red-shuf-rep-revr or red-shuf-rep or red or shuf-rep or None)")
 parser.add_argument("--notransformer", action='store_false',
@@ -52,6 +48,7 @@ use_cuda = True if torch.cuda.is_available() else False
 Tensor = torch.cuda.FloatTensor if use_cuda else torch.FloatTensor
 checkpoint_dir = "./checkpoint/classification/"
 accuracy_txt = "pretrain_accuracy.txt"
+accuracy_v_txt = "pretrain_accuracy_testdata.txt"
 if not os.path.exists(checkpoint_dir):
     os.makedirs(checkpoint_dir)
 
@@ -64,6 +61,7 @@ def load_data_pretrain(transformer):
         # print(len(train_data_esm), len(val_data_esm),
         #       np.count_nonzero(train_label_nparr == 1), np.count_nonzero(val_label_nparr == 1))
         train_seq_nparr = gen_repr(train_data_esm)
+        print("Sequence representation's shape:", train_seq_nparr.shape)
         val_seq_repr = gen_repr(val_data_esm)
 
         val_X = val_seq_repr
@@ -101,8 +99,6 @@ def train_model():
     if classification == "binary":
         out_dim = 2
 
-    pre_accuracy = 0
-
     torch.manual_seed(1)  # seed固定、ネットワーク定義前にする必要ありそう
 
     if classifier_model == "Dis_Lin_classify":
@@ -113,13 +109,13 @@ def train_model():
 
     train_loss = []
     train_accu = []
-    test_accu = []
 
     if use_cuda:
         model = model.cuda()
 
     for epoch in range(1, opt.epoch):
         model.train()  # 学習モード
+        train_accu_tmp = []
 
         for _, (X, y) in enumerate(train_dataloader):
             data = Variable(X.type(Tensor))  # 微分可能な型
@@ -138,42 +134,39 @@ def train_model():
             prediction_sum = prediction.eq(target.data).sum(
             ) if use_cuda else prediction.eq(target.data).sum().numpy()  # 正解率
             accuracy = prediction_sum / len(data)
-            train_accu.append(accuracy)
+            accuracy = accuracy.to('cpu').detach().numpy().copy()
+            train_accu_tmp.append(accuracy)
 
         if epoch % opt.show_loss == 0:
             print('Train Step: {}\tLoss: {:.3f}\tAccuracy: {:.3f}'.format(
-                int(epoch/opt.show_loss), loss.data.item(), sum(train_accu)/len(train_accu)))
+                int(epoch/opt.show_loss), loss.data.item(), sum(train_accu_tmp)/len(train_accu_tmp)))
 
-        if epoch % opt.show_test_result == 0:
-            model.eval()  # 推論モード
-            target_v = Variable(Tensor(val_y))  # .reshape(-1, 1))
-            output_v = model(Variable(Tensor(val_X)))
-            _, prediction_v = torch.max(output_v.data, 1)
-            prediction_v_sum = prediction_v.eq(target_v.data).sum(
-            ) if use_cuda else prediction_v.eq(target_v.data).sum().numpy()  # 正解率
-            accuracy_v = prediction_v_sum / len(prediction_v)
+            train_accu.append(sum(train_accu_tmp)/len(train_accu_tmp))
 
-            if accuracy_v >= pre_accuracy:
-                torch.save(model.state_dict(), checkpoint_dir +
-                           "weights.pth")
-                print("MODEL SAVED")
-                pre_accuracy = accuracy_v
-
-            print('Test Step: {}\tAccuracy: {:.3f}'.format(
-                int(epoch/opt.show_test_result), accuracy_v))
-            accuracy_v = accuracy_v.to('cpu').detach().numpy().copy()
-            test_accu.append(accuracy_v)
-            if opt.revise:
-                make_plot([test_accu], ["Pretraining Test Accuracy"],
-                          figure_dir + "pretrain_accuracy-"+opt.revise+".png")
-
-            else:
-                make_plot([test_accu], ["Pretraining Test Accuracy"],
-                          figure_dir + "pretrain_accuracy.png")
+            torch.save(model.state_dict(), checkpoint_dir +
+                       "weights.pth")
+            print("MODEL SAVED")
+            make_plot([train_accu], ["Pretraining Train Accuracy"],
+                      figure_dir + "pretrain_accuracy.png")
 
     with open(figure_dir + accuracy_txt, 'w') as f:
-        for accu in test_accu:
+        for accu in train_accu:
             f.write("".join([str(float(accu)), '\n']))
+
+    model.eval()  # 推論モード
+    target_v = Variable(Tensor(val_y))  # .reshape(-1, 1))
+    output_v = model(Variable(Tensor(val_X)))
+    _, prediction_v = torch.max(output_v.data, 1)
+    prediction_v_sum = prediction_v.eq(target_v.data).sum(
+    ) if use_cuda else prediction_v.eq(target_v.data).sum().numpy()  # 正解率
+    accuracy_v = prediction_v_sum / len(prediction_v)
+
+    print('Accuracy: {:.3f}'.format(accuracy_v))
+    accuracy_v = accuracy_v.to('cpu').detach().numpy().copy()
+
+    with open(figure_dir + accuracy_v_txt, 'w') as f:
+        f.write(
+            ''.join(['Testdata Accuracy Average: ', str(accuracy_v), '\n']))
 
 
 def main():

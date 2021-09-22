@@ -8,11 +8,12 @@ import torch
 import torchvision.transforms as transforms
 
 
-opt_name = input('Option name: ')
+# opt_name = input('Option name: ')
+opt_name = "posscreen_negexpnoexp"
 
 data_dir = "./real_data_"+opt_name+"/"
 binary_negative_data_file = "negative.txt"
-binary_negative_val_data_file = "val_negatives.txt"
+binary_negative_val_data_file = "val_negative.txt"
 binary_positive_data_file = "positive.txt"
 binary_positive_val_data_file = "val_positive.txt"
 random_data_file = "random_seq.txt"
@@ -208,13 +209,15 @@ def prepare_binary(pos_dir=None, neg_dir=None, rand_dir=None, data_size=None):
                     size_flag = True
 
     if not rand_dir:
-        with open(data_dir + random_data_file) as f:
-            for line in f:
-                tmp = line[:-1].split()
-                seq = list(tmp[0])
-                pre = len(seq)
-                rand_max_len = max(pre, rand_max_len)
-                rand_seqs.append(seq)
+        rand_seqs = None
+        rand_max_len = 0
+        # with open(data_dir + random_data_file) as f:
+        #     for line in f:
+        #         tmp = line[:-1].split()
+        #         seq = list(tmp[0])
+        #         pre = len(seq)
+        #         rand_max_len = max(pre, rand_max_len)
+        #         rand_seqs.append(seq)
 
     label_nparr = np.array(label_list)
     max_len = max(pos_max_len, neg_max_len)

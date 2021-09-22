@@ -10,6 +10,7 @@ import numpy as np
 import Levenshtein
 from translator import text2fasta
 import pandas as pd
+import shutil
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--fasta",  action='store_true',
@@ -41,6 +42,7 @@ real_pos_file = "positive"
 # real_pos_val_file = "val_positive"
 real_neg_file = "negative"
 real_neg_val_file = "val_negative"
+random_file = "random_seq"
 opt_dic = {"red": opt.red, "shuf": opt.shuf, "rep": opt.rep, "revr": opt.revr}
 filename_end = ""
 pos_opt = "posscreen"
@@ -324,7 +326,10 @@ def main():
     real_file_list_tmp = os.listdir(real_data_dir)
     real_file_list = [[real_data_dir, file] for file in real_file_list_tmp]
     text2fasta(real_file_list, real_fasta_dir)
-    print(real_data_dir)
+
+    shutil.copyfile(raw_data_dir+random_file+'.txt', real_data_dir+random_file)
+
+    print('Your option is: ', "_".join([pos_opt, neg_opt]))
 
 
 if __name__ == '__main__':

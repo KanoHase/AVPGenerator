@@ -104,7 +104,7 @@ def calc_sim_rate(norm_prop_df, threshold):
     sq_norm_prop_df = norm_prop_df**2
     dist_df = np.sqrt(sq_norm_prop_df.sum(axis=1))
     bool_dist_df = (dist_df < threshold)
-    sim_rate = bool_dist_df.sum()/len(bool_dist_df.index)*100
+    sim_rate = bool_dist_df.sum()/len(bool_dist_df.index)
     return sim_rate
 
 
@@ -221,6 +221,7 @@ def make_prop_dic(prop_dic, seq_list, real_ave_std_df, dir_name):
 
     # gives distance between gen and real prop
     sim_rate = calc_sim_rate(norm_prop_df, 1.5)
+    print(sim_rate)
 
     # calculate each run_dir/100.txt's prop's average and std
     rundir_ave_std_df = avestd_from_df(prop_df)
@@ -229,6 +230,7 @@ def make_prop_dic(prop_dic, seq_list, real_ave_std_df, dir_name):
     prop_summary_list = rundir_ave_std_df.loc["Average"].values.tolist(
     ) + [sim_rate]
     prop_dic[dir_name] = prop_summary_list
+    print(prop_dic)
     return prop_dic, norm_prop_df, rundir_ave_std_df
 
 

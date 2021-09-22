@@ -41,10 +41,6 @@ parser.add_argument("--classification", type=str, default="binary",
                     help="binary or multi for discriminator classification task")
 parser.add_argument("--fbtype", type=str, default="Transformer",
                     help="Transformer or MetaiAVP for feedback task")
-parser.add_argument("--ut", type=str, default="PR-PS",
-                    help="Choose data update type: PR-PS, P-PS, R-S (start-end, R:Random, P:Positive, S:Synthetic)")
-parser.add_argument("--rev", type=str, default=None,
-                    help="Choose revd data type: red, shuf, rep, revr (red-shuf-rep-revr or red-shuf-rep or red or shuf-rep or None)")
 parser.add_argument("--generator_model", type=str,
                     default="Gen_Lin_Block", help="choose generator model")
 parser.add_argument("--discriminator_model", type=str,
@@ -55,12 +51,16 @@ parser.add_argument("--optimizer", type=str,
                     default="Adam", help="choose optimizer")
 parser.add_argument("--motif",  action='store_true',
                     help="choose whether or not you want to include motif restriction. Default:False, place --motif if you want it to be True.")
-parser.add_argument("--fe", type=float, default=0.25,
+parser.add_argument("--ut", type=str, default="P-PS",
+                    help="Choose data update type: P-PS, PR-PS, R-S (start-end, R:Random, P:Positive, S:Synthetic)")
+parser.add_argument("--fe", type=float, default=0.75,
                     help="percentage of epochs to feedback. e.g: if fe:0.2 and epoch:100, first 80 epochs feedforward and last 20 epochs feedback")
 parser.add_argument("--fp", type=float, default=0.5,
                     help="proportion of positive seqs to feedback. e.g: if fp:0.2 and are 100 positive seqs, 20 of them are picked randomly from the positive seqs and are feedbacked, the rest (80) are picked randomly from non-positive seqs")
 parser.add_argument("--mp", type=float, default=0,
                     help="proportion of mutate for generator. e.g: if mp:0.1, 10 percent of generated seqs are mutated")
+parser.add_argument("--rev", type=str, default=None,
+                    help="Choose revd data type: red, shuf, rep, revr (red-shuf-rep-revr or red-shuf-rep or red or shuf-rep or None)")
 
 opt = parser.parse_args()
 classification = opt.classification
@@ -71,16 +71,24 @@ discriminator_model = opt.discriminator_model
 optimizer = opt.optimizer
 if opt.fe == 0.0:
     opt.fp = opt.mp = "-"
-run_name_dir = "ut" + ut + "_" + "fe" + \
-    str(opt.fe) + "_" + "fp" + \
-    str(opt.fp) + "_" + "mp" + str(opt.mp) + \
-    "_" + "rev" + str(opt.rev) + "/"
-# + "_" + "ep" + str(opt.epoch) + "_" + "ba" + str(opt.batch) + "_" + "lr" + \
-# str(opt.lr) + "_" + "pc" + str(opt.preds_cutoff) + "_" + "gen" + \
-# generator_model + "_" + "dis" + discriminator_model + "/"  # kari
+
+# run_name_dir = "ut" + ut + "_" + "fe" + \
+#     str(opt.fe) + "_" + "fp" + \
+#     str(opt.fp) + "_" + "mp" + str(opt.mp) + \
+#     "_" + "rev" + str(opt.rev) + "/"
+
+run_name_dir = "ep" + str(opt.epoch) + "_" + "ba" + str(opt.batch) + "_" + "lr" + \
+    str(opt.lr) + "_" + "pc" + str(opt.preds_cutoff) + \
+    "_" + "opt" + str(opt.optimizer)
+
+# + "_" + "gen" + generator_model + "_" + "dis" + discriminator_model + "/"  # kari
+
 figure_dir = opt.figure_dir
 if not os.path.exists(figure_dir + run_name_dir):
     os.makedirs(figure_dir + run_name_dir)
+checkpoint_dir = "./checkpoint/WGAN/"
+if not os.path.exists(checkpoint_dir):
+    os.makedirs(checkpoint_dir)
 use_cuda = True if torch.cuda.is_available() else False
 print(run_name_dir)
 Tensor = torch.cuda.FloatTensor if use_cuda else torch.FloatTensor
@@ -92,7 +100,7 @@ in_dim_esm = 768  # kari
 def train_model():
     dataset, seq_nparr, label_nparr, rand_seqs, max_len, amino_num, a_list, motif_list = load_data(
         ut, classification, opt.motif, revise=opt.rev, data_size=opt.data_size)  # numpy.ndarray
-    # print("=========", seq_nparr.shape, max_len)
+    print("=========", seq_nparr.shape, max_len)
     # if nofb == True, dataset and seq_nparr must be random amino, not AVP
     # ['D', 'L', 'G', 'P', 'I', 'S', 'E', 'R', 'V', 'T', 'N', 'A', 'K', 'H', 'Q', 'M', 'Y', 'F', 'W', 'C', 'Z']
     dataloader = torch.utils.data.DataLoader(
@@ -215,6 +223,11 @@ def train_model():
                 else:
                     g_fake_data_all = torch.cat(
                         (g_fake_data_all, g_fake_data), 0)
+
+            torch.save(G.state_dict(), checkpoint_dir +
+                       "g_weights.pth")
+            torch.save(D.state_dict(), checkpoint_dir +
+                       "d_weights.pth")
 
             # Append things for logging
             d_fake_np, d_real_np, gp_np = (torch.mean(d_fake_pred).data).cpu().numpy(), \
