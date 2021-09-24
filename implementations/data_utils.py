@@ -209,15 +209,13 @@ def prepare_binary(pos_dir=None, neg_dir=None, rand_dir=None, data_size=None):
                     size_flag = True
 
     if not rand_dir:
-        rand_seqs = None
-        rand_max_len = 0
-        # with open(data_dir + random_data_file) as f:
-        #     for line in f:
-        #         tmp = line[:-1].split()
-        #         seq = list(tmp[0])
-        #         pre = len(seq)
-        #         rand_max_len = max(pre, rand_max_len)
-        #         rand_seqs.append(seq)
+        with open(data_dir + random_data_file) as f:
+            for line in f:
+                tmp = line[:-1].split()
+                seq = list(tmp[0])
+                pre = len(seq)
+                rand_max_len = max(pre, rand_max_len)
+                rand_seqs.append(seq)
 
     label_nparr = np.array(label_list)
     max_len = max(pos_max_len, neg_max_len)

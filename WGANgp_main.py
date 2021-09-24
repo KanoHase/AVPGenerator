@@ -79,7 +79,7 @@ if opt.fe == 0.0:
 
 run_name_dir = "ep" + str(opt.epoch) + "_" + "ba" + str(opt.batch) + "_" + "lr" + \
     str(opt.lr) + "_" + "pc" + str(opt.preds_cutoff) + \
-    "_" + "opt" + str(opt.optimizer)
+    "_" + "opt" + str(opt.optimizer) + '/'
 
 # + "_" + "gen" + generator_model + "_" + "dis" + discriminator_model + "/"  # kari
 

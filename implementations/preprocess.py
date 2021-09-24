@@ -327,7 +327,8 @@ def main():
     real_file_list = [[real_data_dir, file] for file in real_file_list_tmp]
     text2fasta(real_file_list, real_fasta_dir)
 
-    shutil.copyfile(raw_data_dir+random_file+'.txt', real_data_dir+random_file)
+    shutil.copyfile(raw_data_dir+random_file+'.txt',
+                    real_data_dir+random_file+'.txt')
 
     print('Your option is: ', "_".join([pos_opt, neg_opt]))
 

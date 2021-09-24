@@ -5,25 +5,23 @@ from propy import PyPro
 # check: https://propy3.readthedocs.io/en/latest/PyPro.html
 from modlamp.descriptors import GlobalDescriptor
 import argparse
+import re
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--allepoch", action='store_true',
                     help="choose whether or not you want to evaluate all epoch's transition. Place --allepoch if you need evaluation for all epoch's transition.")
-parser.add_argument("--noopt", action='store_true',
-                    help="choose whether or not you want to ignore option. Place --noopt if you want to ignore option.")
 opt = parser.parse_args()
 
-if not opt.noopt:
-    opt_name = input('Option name: ')
+# opt_name = input('Option name: ')
 
+opt_name = "posscreen_negexpnoexp"
 data_dir = "./real_data_"+opt_name+"/"
-samples_dir = "./samples_"+opt_name+"/"
-eval_dir = "./eval_"+opt_name+"/"
+samples_dir = "./samples/"
+eval_dir = "./eval/"
 real_pos_file = "val_positive"
 real_neg_file = "val_negative"
-gen_file = "100.txt"
-sub_gen_file = "99.txt"
-options = ["ut", "fe", "fp", "mp", "rev"]
+options = ["ep", "ba", "lr", "pc", "opt"]
+query = 'ep(.*)_ba'
 task_list = ["Length", "Isoelectric Point", "Hydrophobicity"]
 std_task_list = ["Standard Deviation of Length",
                  "Standard Deviation of Isoelectric Point", "Standard Deviation of Hydrophobicity"]
@@ -221,7 +219,6 @@ def make_prop_dic(prop_dic, seq_list, real_ave_std_df, dir_name):
 
     # gives distance between gen and real prop
     sim_rate = calc_sim_rate(norm_prop_df, 1.5)
-    print(sim_rate)
 
     # calculate each run_dir/100.txt's prop's average and std
     rundir_ave_std_df = avestd_from_df(prop_df)
@@ -230,7 +227,6 @@ def make_prop_dic(prop_dic, seq_list, real_ave_std_df, dir_name):
     prop_summary_list = rundir_ave_std_df.loc["Average"].values.tolist(
     ) + [sim_rate]
     prop_dic[dir_name] = prop_summary_list
-    print(prop_dic)
     return prop_dic, norm_prop_df, rundir_ave_std_df
 
 
@@ -264,13 +260,15 @@ def main():
     std_dic = {}
 
     for run_dir in run_dirs:
+        name = re.findall(query, run_dir)
+        gen_file = name[0]+'.txt'
+
+        print(run_dir, gen_file)
+
         if opt.allepoch:
             allepoch_transition(samples_dir, eval_dir, task_list, run_dir)
 
-        if not os.path.exists(samples_dir+run_dir+"/"+gen_file):
-            gen_dir = samples_dir+run_dir+"/"+sub_gen_file
-        else:
-            gen_dir = samples_dir+run_dir+"/"+gen_file
+        gen_dir = samples_dir+run_dir+"/"+gen_file
 
         seq_list = make_seq_list(gen_dir)
 
