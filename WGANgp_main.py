@@ -14,12 +14,16 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.autograd import Variable
 import torch.optim as optim
+import torch_optimizer as roptim
 import numpy as np
 import sys
+import time
+
 np.set_printoptions(threshold=sys.maxsize)
+start = time.time()
 
 parser = argparse.ArgumentParser()
-parser.add_argument("--epoch", type=int, default=100,
+parser.add_argument("--epoch", type=int, default=75,
                     help="number of epochs of training")
 parser.add_argument("--hidden", type=int, default=512,
                     help="number of neurons in hidden layer")
@@ -29,6 +33,8 @@ parser.add_argument("--show_loss", type=int, default=5,
                     help="number of epochs of showing loss")
 parser.add_argument("--d_steps", type=int, default=10,
                     help="number of epochs to train generator")
+parser.add_argument("--sample_itr", type=int, default=7,
+                    help="sample_itr*batch will be number of generates sequences")
 parser.add_argument("--lr", type=float, default=0.0001,
                     help="learning rate")
 parser.add_argument("--preds_cutoff", type=float,
@@ -48,7 +54,7 @@ parser.add_argument("--discriminator_model", type=str,
 parser.add_argument("--loss", type=str,
                     default="WGAN-gp", help="choose loss")
 parser.add_argument("--optimizer", type=str,
-                    default="Adam", help="choose optimizer")
+                    default="Adam", help="choose optimizer: Adam or RAdam")
 parser.add_argument("--motif",  action='store_true',
                     help="choose whether or not you want to include motif restriction. Default:False, place --motif if you want it to be True.")
 parser.add_argument("--ut", type=str, default="P-PS",
@@ -77,9 +83,9 @@ if opt.fe == 0.0:
 #     str(opt.fp) + "_" + "mp" + str(opt.mp) + \
 #     "_" + "rev" + str(opt.rev) + "/"
 
-run_name_dir = "ep" + str(opt.epoch) + "_" + "ba" + str(opt.batch) + "_" + "lr" + \
+run_name_dir = "_ep" + str(opt.epoch) + "_" + "ba" + str(opt.batch) + "_" + "lr" + \
     str(opt.lr) + "_" + "pc" + str(opt.preds_cutoff) + \
-    "_" + "opt" + str(opt.optimizer) + '/'
+    "_" + "opt" + str(opt.optimizer) + "_" + "itr" + str(opt.sample_itr) + '/'
 
 # + "_" + "gen" + generator_model + "_" + "dis" + discriminator_model + "/"  # kari
 
@@ -100,7 +106,8 @@ in_dim_esm = 768  # kari
 def train_model():
     dataset, seq_nparr, label_nparr, rand_seqs, max_len, amino_num, a_list, motif_list = load_data(
         ut, classification, opt.motif, revise=opt.rev, data_size=opt.data_size)  # numpy.ndarray
-    print("=========", seq_nparr.shape, max_len)
+    print("Sequence array shape: ", seq_nparr.shape,
+          "Max sequence length: ", max_len)
     # if nofb == True, dataset and seq_nparr must be random amino, not AVP
     # ['D', 'L', 'G', 'P', 'I', 'S', 'E', 'R', 'V', 'T', 'N', 'A', 'K', 'H', 'Q', 'M', 'Y', 'F', 'W', 'C', 'Z']
     dataloader = torch.utils.data.DataLoader(
@@ -128,6 +135,9 @@ def train_model():
     if optimizer == "Adam":
         G_optimizer = optim.Adam(G.parameters(), lr=opt.lr, betas=(0.5, 0.9))
         D_optimizer = optim.Adam(D.parameters(), lr=opt.lr, betas=(0.5, 0.9))
+    else:
+        G_optimizer = roptim.RAdam(G.parameters(), lr=opt.lr, betas=(0.5, 0.9))
+        D_optimizer = roptim.RAdam(D.parameters(), lr=opt.lr, betas=(0.5, 0.9))
 
     d_fake_losses, d_real_losses, grad_penalties = [], [], []
     G_losses, D_losses, W_dist = [], [], []
@@ -145,9 +155,10 @@ def train_model():
         # nofb = True
 
         if epoch >= fbepoch:  # if you're using FeedBack
-            sample_itr = math.floor(len(label_nparr)/opt.batch)  # kari
+            # sample_itr = math.floor(len(label_nparr)/opt.batch)  # kari
+            print('!!!!!!!!!!', math.floor(len(label_nparr)/opt.batch))
             sampled_seqs = generate_sample(
-                sample_itr, opt.batch, max_len, amino_num, G, a_list, motif_list)
+                opt.sample_itr, opt.batch, max_len, amino_num, G, a_list, motif_list)
             # add certain amount of mutation to fight mode collapse
             mutated_sampled_seqs = mutate_seqs(
                 sampled_seqs, opt.mp, a_list)
@@ -182,13 +193,11 @@ def train_model():
             else:
                 dataset, seq_nparr, order_label = update_data(
                     pos_nparr, seq_nparr, order_label, label_nparr, epoch)
-            print(len(seq_nparr))
 
             dataloader = torch.utils.data.DataLoader(
                 dataset, batch_size=opt.batch, shuffle=False, drop_last=True)
 
         for i, (data, _) in enumerate(dataloader):
-            # print(vars(vars(dataloader)['dataset']))
             real_data = Variable(data.type(Tensor))
             D.zero_grad()
 
@@ -265,6 +274,11 @@ def train_model():
                                                    best_g_err, run_name_dir, a_list, motif_list)
 
     print('Best epoch:{}, Minimum g_error:{}'.format(best_epoch, best_g_err))
+
+    process_time = time.time() - start
+    print('Process time: ', process_time, 'sec')
+    with open(figure_dir + run_name_dir+'time.txt', 'w') as f:
+        f.write(' '.join([str(process_time), 'sec']))
 
 
 def prepare_model(in_dim, max_len, amino_num):
