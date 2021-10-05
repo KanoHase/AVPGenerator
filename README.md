@@ -15,7 +15,7 @@ All default arguments for demo are provided.
 
 4) Run `python evaluate.py` to evaluate the generated sequences.
 
-5) After deciding which the optimal mode, run `python pairwise.py` to do pairwise alignment.
+5) After deciding the optimal mode, run `python pairwise.py` to do pairwise alignment.
 
 ## Note
 - Data alteration
