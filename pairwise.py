@@ -1,16 +1,21 @@
 from Bio import pairwise2
 from Bio.pairwise2 import format_alignment
 import pandas as pd
+import re
 
 raw_dir = "./raw_data/"
 real_pos_file = "val_positive"
 real_pos_train_file = "positive"
-sample_dir = "./samples_posscreen_negexpnoexp/utP-PS_fe0.75_fp0.5_mp0.0_revNone/"
-eval_dir = "./eval_posscreen_negexpnoexp/utP-PS_fe0.75_fp0.5_mp0.0_revNone/"
-file_num = '100'
-file_name = file_num+".txt"
-result_file = "align_result"+file_num+".txt"
-align_file = "alignment"+file_num+".txt"
+sample_dir = "./samples/"
+eval_dir = "./eval/"
+chosen_dir = "ep75_ba64_lr0.0001_pc0.8_optAdam_itr10/"
+query = 'ep(.*)_ba'
+name = re.findall(query, chosen_dir)
+gen_file = name[0]+'.txt'
+# file_num = '100'
+file_name = gen_file
+result_file = "align_result"+gen_file
+align_file = "alignment"+gen_file
 
 
 def make_seq_list(path):
@@ -64,9 +69,9 @@ def pairwise(seq_list, train_path, val_path, result_path, align_path):
 
 
 def main():
-    seq_list = make_seq_list(sample_dir+file_name)
+    seq_list = make_seq_list(sample_dir+chosen_dir+file_name)
     pairwise(seq_list, raw_dir+real_pos_train_file +
-             ".txt", raw_dir+real_pos_file+".txt", eval_dir+result_file, eval_dir+align_file)
+             ".txt", raw_dir+real_pos_file+".txt", eval_dir+chosen_dir+result_file, eval_dir+chosen_dir+align_file)
 
 
 if __name__ == '__main__':

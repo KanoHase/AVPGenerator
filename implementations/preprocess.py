@@ -33,6 +33,7 @@ parser.add_argument("--sim", type=float, default=0.6,
                     help="number of epochs of training")
 parser.add_argument("--vir_min", type=int, default=10,
                     help="minimum number of target virus")
+# Default:'HIV', 'HSV', 'RSV', 'FIV', 'MV', 'HCV', 'HPF3', 'WNV', 'paramyxoviruses', 'DV', 'Vaccinia', 'Influenza', 'SIV', 'SARS-CoV'
 parser.add_argument("--max_seqlen", type=int, default=50,
                     help="maximum sequence length")
 opt = parser.parse_args()

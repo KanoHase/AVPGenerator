@@ -10,9 +10,6 @@ All default arguments for demo are provided.
   e.g. `python ./implementations/preprocess.py --screen --vir_min 1 --noexp`
 
 2) Run `python pretrain_classification.py` to pretrain the Transformer Function Analyser.
-  Remember to comment out the different binary_negative_data_file and binary_negative_val_data_file
-  e.g. if 1) is `python ./implementations/preprocess.py --screen --vir_min 1 --noexp`, comment out "negative_exp.txt" and "val_negative_exp.txt" row
-  - **Expected Output**
 
 3) Run `python WGANgp_main.py` or `zsh main.sh`to train WGAN with Gradient Penalty to produce valid gene sequences.
 
