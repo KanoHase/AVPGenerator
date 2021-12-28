@@ -4,7 +4,7 @@ import numpy as np
 
 from implementations.data_utils import load_data_classify, load_data_esm, to_dataloader
 from implementations.afterprocess import make_plot, write_samples
-from esm_master.initialize_esm import gen_repr
+from esm_main.initialize_esm import gen_repr
 from models import *
 
 import torch
@@ -13,7 +13,7 @@ from torch.autograd import Variable
 import torch.optim as optim
 
 parser = argparse.ArgumentParser()
-parser.add_argument("--epoch", type=int, default=1000,
+parser.add_argument("--epoch", type=int, default=2000,
                     help="number of epochs of training")
 parser.add_argument("--hidden", type=int, default=512,
                     help="number of neurons in hidden layer")
@@ -61,7 +61,7 @@ def load_data_pretrain(transformer):
         # print(len(train_data_esm), len(val_data_esm),
         #       np.count_nonzero(train_label_nparr == 1), np.count_nonzero(val_label_nparr == 1))
         train_seq_nparr = gen_repr(train_data_esm)
-        print("Sequence representation's shape:", train_seq_nparr.shape)
+        print("Sequence representation's shape(train):", train_seq_nparr.shape)
         val_seq_repr = gen_repr(val_data_esm)
 
         val_X = val_seq_repr
@@ -102,6 +102,7 @@ def train_model():
     torch.manual_seed(1)  # seed固定、ネットワーク定義前にする必要ありそう
 
     if classifier_model == "Dis_Lin_classify":
+        print(in_dim, out_dim, opt.hidden)
         model = Dis_Lin_classify(in_dim, out_dim, opt.hidden)
 
     if optimizer == "SGD":
@@ -109,6 +110,7 @@ def train_model():
 
     train_loss = []
     train_accu = []
+    pre_accu = 0
 
     if use_cuda:
         model = model.cuda()
@@ -138,14 +140,17 @@ def train_model():
             train_accu_tmp.append(accuracy)
 
         if epoch % opt.show_loss == 0:
+            accu_ave = sum(train_accu_tmp)/len(train_accu_tmp)
             print('Train Step: {}\tLoss: {:.3f}\tAccuracy: {:.3f}'.format(
-                int(epoch/opt.show_loss), loss.data.item(), sum(train_accu_tmp)/len(train_accu_tmp)))
+                int(epoch/opt.show_loss), loss.data.item(), accu_ave))
 
-            train_accu.append(sum(train_accu_tmp)/len(train_accu_tmp))
+            train_accu.append(accu_ave)
+            if pre_accu < accu_ave:
+                torch.save(model.state_dict(), checkpoint_dir +
+                           "weights.pth")
+                print("MODEL SAVED")
+                pre_accu = accu_ave
 
-            torch.save(model.state_dict(), checkpoint_dir +
-                       "weights.pth")
-            print("MODEL SAVED")
             make_plot([train_accu], ["Pretraining Train Accuracy"],
                       figure_dir + "pretrain_accuracy.png")
 

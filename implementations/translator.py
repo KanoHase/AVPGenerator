@@ -76,3 +76,20 @@ def str2tensor(seq_str, a_list, motif_list, max_len, output=False):
     seq_nparr = seq_nparr.reshape(-1, len(a_list)*max_len)
 
     return seq_nparr
+
+
+def list2fasta(seq_list, out_path):
+    with open(out_path, "w") as f:
+        i = 1
+        for seq in seq_list:
+            tmp = ">" + str(i) + "\n" + seq + "\n"
+            f.write(tmp)
+            i += 1
+
+
+def fasta2txt(fasta_path, txt_path):
+    with open(fasta_path) as f:
+        with open(txt_path, 'w') as g:
+            for line in f:
+                if '>' not in line:
+                    g.write(line)

@@ -4,7 +4,7 @@ import time
 import random
 from FunctionAnalyser import TransClassifier
 from implementations.data_utils import load_data_esm, to_dataloader
-from esm_master.initialize_esm import gen_repr
+from esm_main.initialize_esm import gen_repr
 
 input_path = './data_fbgan/input/'
 output_path = './data_fbgan/output/'

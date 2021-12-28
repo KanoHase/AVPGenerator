@@ -39,7 +39,7 @@ class Dis_Lin_classify(nn.Module):
         return F.softmax(x, dim=1)
 
 
-class Gen_Lin_Block(nn.Module):
+class Gen_Lin_Block(nn.Module):  # DEFAULT
     def __init__(self, in_dim, out_dim, hidden):
         super(Gen_Lin_Block, self).__init__()
 
@@ -64,7 +64,7 @@ class Gen_Lin_Block(nn.Module):
         return x
 
 
-class Dis_Lin(nn.Module):
+class Dis_Lin(nn.Module):  # DEFAULT
     def __init__(self, in_dim, out_dim, hidden):
         super(Dis_Lin, self).__init__()
 

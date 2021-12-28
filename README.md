@@ -13,14 +13,15 @@ All default arguments for demo are provided.
 
 3) Run `python WGANgp_main.py` or `zsh main.sh`to train WGAN with Gradient Penalty to produce valid gene sequences.
 
-4) Run `python evaluate.py` to evaluate the generated sequences.
+4) Run alphafold2 for Pos, Neg and Syn. `alphafold_out` folder will be created.
 
-5) After deciding the optimal mode, run `python pairwise.py` to do pairwise alignment.
+5) Run `python evaluate.py` to evaluate the generated sequences.
 
 ## Note
 - Data alteration
   - ./raw_data/
-    - positive.txt, 34: Chandipura Virus → Chandipura virus
-    - positive.txt, 35: Chandipura virus , Vesicular stomatitis virus → Chandipura virus, Vesicular stomatitis virus
+    - positive.txt, line 34: Chandipura Virus → Chandipura virus
+    - positive.txt, line 35: Chandipura virus , Vesicular stomatitis virus → Chandipura virus, Vesicular stomatitis virus
     - positive.txt, line 46: l → I
-    - positive.txt, 540: Paramyxovirus → paramyxoviruses
+    - positive.txt, line 540: Paramyxovirus → paramyxoviruses
+    - val_negative_exp.txt, 22: RGGRLCYARRRFAVCVGRb → RGGRLCYARRRFAVCVGRB

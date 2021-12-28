@@ -1,5 +1,10 @@
 /__pycache__/
 /.vector_cache/
+/alphafold_out/negdata_out/
+/alphafold_out/posdata_out/
+/alphafold_out/syndata_out/
+/docking/*_docking/
+/docking/virusprotein/
 /eval*/
 /figures*/
 /real_data*/

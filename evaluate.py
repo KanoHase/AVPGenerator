@@ -6,12 +6,25 @@ from propy import PyPro
 from modlamp.descriptors import GlobalDescriptor
 import argparse
 import re
+import statistics
+from implementations.pepsol import soluble_out
+from implementations.pairwise import pairwise_main
+from implementations.dssp import dssp_main
+from implementations.translator import list2fasta
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--allepoch", action='store_true',
                     help="choose whether or not you want to evaluate all epoch's transition. Place --allepoch if you need evaluation for all epoch's transition.")
-parser.add_argument("--nocompareprop", action='store_true',
-                    help="choose whether or not you want to compare properties with real data. Place --nocompareprop if you don't need it.")
+parser.add_argument("--nocalcsol", action='store_true',
+                    help="choose whether or not you want to calculate solubility. Place --nocalcsol if you don't need it.")
+parser.add_argument("--nodssp", action='store_true',
+                    help="choose whether or not you want to include dssp info. Place --nodssp if you don't need it.")
+parser.add_argument("--pair", action='store_true',
+                    help="choose whether or not you want to do pairwise alignment. Place --pair if you need it.")
+parser.add_argument("--compareprop", action='store_true',
+                    help="choose whether or not you want to compare properties with real data. Place --compareprop if you need it.")
+parser.add_argument("--simthres", type=float, default=1.5,
+                    help="threshold of similarity rate")
 opt = parser.parse_args()
 
 chosen_dir = "ep75_ba64_lr0.0001_pc0.8_optAdam_itr10/"
@@ -19,17 +32,27 @@ chosen_dir = "ep75_ba64_lr0.0001_pc0.8_optAdam_itr10/"
 opt_name = "posscreen_negexpnoexp"
 data_dir = "./real_data_"+opt_name+"/"
 raw_dir = "./raw_data/"
-samples_dir = "./samples/"
-eval_dir = "./eval/"
+samples_dir = "./samples_/"
+eval_dir = "./eval_/"
 real_pos_file = "val_positive"
 real_pos_train_file = "positive"
 real_neg_file = "val_negative"
-simprop_file = "prop_comparison"
+prop_file = "properties.txt"
+stdev_file = "stdev.txt"
+aacomp_file = "aacomp.txt"
+simprop_file = "prop_comparison_all"
+seq_pred_file = "sorted_seq_preds.txt"
+sim_struct_file = "similar_struct.txt"
+struct_analyse_file = 'similar_struct_analyse.txt'
+set_fasta_file = "set_seq.fasta"
+sol_file = "sol_data.txt"
 options = ["ep", "ba", "lr", "pc", "opt", "itr"]
+non_a_list = ['B', 'J', 'O', 'U', 'X', 'Z']  # kari
 query = 'ep(.*)_ba'
-task_list = ["Length", "Isoelectric Point", "Hydrophobicity"]
+task_list = ["Length", "Isoelectric Point",
+             "Hydrophobicity"]  # , "Molecular Weight"]
 std_task_list = ["Standard Deviation of Length",
-                 "Standard Deviation of Isoelectric Point", "Standard Deviation of Hydrophobicity"]
+                 "Standard Deviation of Isoelectric Point", "Standard Deviation of Hydrophobicity"]  # , "Standard Deviation of Molecular Weight"]
 used_v_list = ['HIV', 'HSV', 'RSV', 'FIV', 'MV', 'HCV', 'HPF3', 'WNV',
                'paramyxoviruses', 'DV', 'Vaccinia', 'Influenza', 'SIV', 'SARS-CoV']
 if not os.path.exists(eval_dir):
@@ -51,7 +74,7 @@ def real_data_process(real_path, real_file):
 
     if not os.path.exists(eval_dir+real_file+"/"):
         os.mkdir(eval_dir+real_file+"/")
-    calc_write_aacomp(real_seq_list, eval_dir+real_file+"/aacomp.txt")
+    calc_write_aacomp(real_seq_list, eval_dir+real_file+"/"+aacomp_file)
 
     return real_ave_std_df, prop_real, std_real
 
@@ -61,6 +84,8 @@ def make_seq_list(path, raw=False):
 
     if raw:
         df = pd.read_csv(path, sep="\t")
+        for na in non_a_list:
+            df = df[~df['Sequence'].str.contains(na)]
         seq_v_dic = dict(zip(df['Sequence'], df['Virus']))
         seq_list = list(seq_v_dic.keys())
     else:
@@ -70,6 +95,12 @@ def make_seq_list(path, raw=False):
                 seq_list.append(seq)
         seq_v_dic = None
     return seq_list, seq_v_dic
+
+
+def make_set_fasta(seq_list, out_path):
+    seq_set_list = list(set(seq_list))
+    list2fasta(seq_set_list, out_path)
+    return seq_set_list
 
 
 def calc_prop(seq_list, task_list):
@@ -83,6 +114,8 @@ def calc_prop(seq_list, task_list):
             glob_seq.isoelectric_point()
         if task == "Hydrophobicity":
             glob_seq.hydrophobic_ratio()
+        # if task == "Molecular Weight":
+        #     glob_seq.calculate_MW()
         if len(prop_array) == 0:
             prop_array = glob_seq.descriptor
         else:
@@ -231,7 +264,7 @@ def make_prop_dic(prop_dic, seq_list, real_ave_std_df, dir_name):
     norm_prop_df = norm_prop(prop_df, real_ave_std_df)
 
     # gives distance between gen and real prop
-    sim_rate = calc_sim_rate(norm_prop_df, 1.5)
+    sim_rate = calc_sim_rate(norm_prop_df, opt.simthres)
 
     # calculate each run_dir/100.txt's prop's average and std
     rundir_ave_std_df = avestd_from_df(prop_df)
@@ -317,6 +350,129 @@ def calc_all_syndata_normpropdf(query, chosen_dir, samples_dir, ave_std_df):
     return norm_all_fake_seqprop_df
 
 
+def write_prop_sim(path, norm_all_fake_seqprop_df, norm_all_real_seqprop_df, seq_v_dic):
+    '''
+    for compareprop only
+    '''
+    with open(path, 'w') as f:
+        f.write(
+            'Synthetic Sequence\tMost Similar Real Sequence\tDistance\tTarget Virus\tTrain or Val\n')
+        unused_v_list = []
+
+        for index, row in norm_all_fake_seqprop_df.iterrows():
+            df_diff_sqr = (
+                row.iloc[:-1]-norm_all_real_seqprop_df.iloc[:, :-1])**2
+            dist_df = df_diff_sqr.sum(axis=1)
+            mindist_seq, dist = dist_df.idxmin(), dist_df.min()
+            f.write(
+                '\t'.join([row.name, mindist_seq, str(dist), seq_v_dic[mindist_seq], norm_all_real_seqprop_df.at[mindist_seq, 'Train or Val'], '\n']))
+
+            if seq_v_dic[mindist_seq] not in used_v_list:
+                unused_v_list.append(seq_v_dic[mindist_seq])
+
+    print('untrained viruses: ', set(unused_v_list))
+
+
+def calc_solubility(input_path):
+    seq_list, _ = make_seq_list(input_path)
+
+    sol_seq_dic = soluble_out(seq_list)
+    sol_seq_df = pd.DataFrame(list(sol_seq_dic.items()),
+                              columns=['Synthetic Sequence', 'Solubility']).set_index('Synthetic Sequence')
+    count = 0
+    for v in sol_seq_dic.values():
+        if v:
+            count += 1
+
+    count_str = 'SYN DATA\tSoluble: '+str(count)+'\tAll: '+str(len(
+        sol_seq_dic))+'\tPercentage: '+str(count/len(sol_seq_dic))
+    print(count_str)
+    return sol_seq_df, count_str
+
+
+def calc_solubility_real(train_path, val_path):
+    train_seq_list, _ = make_seq_list(train_path, raw=True)
+    val_seq_list, _ = make_seq_list(val_path, raw=True)
+    seq_list = train_seq_list
+    seq_list.extend(val_seq_list)
+    sol_seq_dic = soluble_out(seq_list)
+    count = 0
+    for v in sol_seq_dic.values():
+        if v:
+            count += 1
+
+    count_str = 'REAL DATA\tSoluble: '+str(count)+'\tAll: '+str(len(
+        sol_seq_dic))+'\tPercentage: '+str(count/len(sol_seq_dic))
+    print(count_str)
+    return count_str
+
+
+def sol(path):
+    sol_seq_df, count_str = calc_solubility(
+        path)
+    real_count_str = calc_solubility_real(raw_dir+real_pos_train_file+".txt",  raw_dir +
+                                          real_pos_file+".txt")
+    with open(eval_dir+chosen_dir+sol_file, 'w') as f:
+        f.write('\n'.join([count_str, real_count_str]))
+    return sol_seq_df
+
+
+def mergewith_solpred(sol_seq_df, result_df, seq_pred_df):
+    df = pd.merge(result_df, seq_pred_df.iloc[:, :-1],
+                  left_index=True, right_index=True)
+    df = pd.merge(df, sol_seq_df,
+                  left_index=True, right_index=True)
+    sorted_df = df.sort_values('Solubility', ascending=False)
+    return sorted_df
+
+
+def sol_struct():
+    name = re.findall(query, chosen_dir)
+    gen_file = name[0]+'.txt'
+
+    syn_pair_dist_df = dssp_main(eval_dir+chosen_dir+struct_analyse_file)
+    syn_pair_dist_df = syn_pair_dist_df.set_index('Synthetic Sequence')
+
+    sol_seq_df, count_str = calc_solubility(
+        samples_dir+chosen_dir+gen_file)
+
+    seq_pred_df = pd.read_csv(
+        eval_dir+chosen_dir+seq_pred_file, sep="\t").set_index('Synthetic Sequence')
+    sorted_df = mergewith_solpred(
+        sol_seq_df, syn_pair_dist_df, seq_pred_df)
+    print(sorted_df)
+    sorted_df.to_csv(eval_dir+chosen_dir+sim_struct_file, sep='\t')
+
+
+def sol_seqpair(path, align_file, sim_seq_file, seq_analyse_file, syn=True):
+    pairwise_df = pairwise_main(path, raw_dir+real_pos_train_file +
+                                ".txt", raw_dir+real_pos_file+".txt", eval_dir+chosen_dir+align_file, eval_dir+chosen_dir+seq_analyse_file)
+
+    if syn:
+        seq_pred_df = pd.read_csv(
+            eval_dir+chosen_dir+seq_pred_file, sep="\t").set_index('Synthetic Sequence')
+        sol_seq_df = sol(path)
+        sorted_df = mergewith_solpred(
+            sol_seq_df, pairwise_df, seq_pred_df)
+    else:
+        sorted_df = pairwise_df
+
+    sorted_df.to_csv(eval_dir+chosen_dir+sim_seq_file, sep='\t')
+
+
+def compare_prop():
+    # real data
+    norm_all_real_seqprop_df, ave_std_df, seq_v_dic = calc_all_realdata_normpropdf(
+        raw_dir+real_pos_train_file+'.txt', raw_dir+real_pos_file+'.txt')
+
+    # syn data
+    norm_all_fake_seqprop_df = calc_all_syndata_normpropdf(
+        query, chosen_dir, samples_dir, ave_std_df)
+
+    write_prop_sim(eval_dir+chosen_dir+simprop_file+'.txt',
+                   norm_all_fake_seqprop_df, norm_all_real_seqprop_df, seq_v_dic)
+
+
 def main():
     # calculate real pos and neg data's average and std
     real_ave_std_df, prop_real, std_real = real_data_process(
@@ -344,6 +500,9 @@ def main():
 
         seq_list, _ = make_seq_list(gen_dir)
 
+        seq_set_list = make_set_fasta(
+            seq_list, eval_dir+run_dir+"/"+set_fasta_file)
+
         prop_dic, norm_prop_df, rundir_ave_std_df = make_prop_dic(
             prop_dic, seq_list, real_ave_std_df, run_dir)
 
@@ -353,7 +512,7 @@ def main():
         # calculate and write each run_dir/100.txt's aacomp
         if not os.path.exists(eval_dir+run_dir+"/"):
             os.mkdir(eval_dir+run_dir+"/")
-        calc_write_aacomp(seq_list, eval_dir+run_dir+"/aacomp.txt")
+        calc_write_aacomp(seq_list, eval_dir+run_dir+"/"+aacomp_file)
 
     # real negative data
     seq_list, _ = make_seq_list(data_dir+real_neg_file+".txt")
@@ -366,42 +525,30 @@ def main():
 
     # write results
     dic_to_file(prop_header, prop_real, options,
-                prop_dic, eval_dir+"/properties.txt")
+                prop_dic, eval_dir+"/"+prop_file)
     dic_to_file(std_header, std_real, options,
-                std_dic, eval_dir+"/stdev.txt")
+                std_dic, eval_dir+"/"+stdev_file)
 
-    # compare each seqs' prop similarity
-    if not opt.nocompareprop:
-        # real data
-        norm_all_real_seqprop_df, ave_std_df, seq_v_dic = calc_all_realdata_normpropdf(
-            raw_dir+real_pos_train_file+'.txt', raw_dir+real_pos_file+'.txt')
-        print(norm_all_real_seqprop_df)
+    # choose soluble peptides, include structure similarity info, and merge, Default: True
+    if not (opt.nocalcsol or opt.nodssp):
+        sol_struct()
 
-        # syn data
-        norm_all_fake_seqprop_df = calc_all_syndata_normpropdf(
-            query, chosen_dir, samples_dir, ave_std_df)
-        print(norm_all_fake_seqprop_df)
+    # choose soluble peptides, do pairwise alignment, and merge, Default: False
+    if not opt.nocalcsol and opt.pair:
+        name = re.findall(query, chosen_dir)
+        gen_file = name[0]+'.txt'
 
-        with open(eval_dir+chosen_dir+simprop_file+'.txt', 'w') as f:
-            f.write(
-                'Synthetic Sequence\tMost Similar Real Sequence\tDistance\tTarget Virus\tTrain or Val\n')
-            unused_v_list = []
+        sol_seqpair(samples_dir+chosen_dir+gen_file,
+                    "syn_align.txt", 'syn_simseq.txt', 'syn_simseq_analyse.txt')
+        sol_seqpair('./alphafold_out/neg_all.txt',
+                    "neg_align.txt", 'neg_simseq.txt', 'neg_simseq_analyse.txt', syn=False)
 
-            for index, row in norm_all_fake_seqprop_df.iterrows():
-                # print(row.iloc[:-1])
-                df_diff_sqr = (
-                    row.iloc[:-1]-norm_all_real_seqprop_df.iloc[:, :-1])**2
-                dist_df = df_diff_sqr.sum(axis=1)
-                mindist_seq, dist = dist_df.idxmin(), dist_df.min()
-                f.write(
-                    '\t'.join([row.name, mindist_seq, str(dist), seq_v_dic[mindist_seq], norm_all_real_seqprop_df.at[mindist_seq, 'Train or Val'], '\n']))
-                print(row.name, mindist_seq, dist,
-                      seq_v_dic[mindist_seq], norm_all_real_seqprop_df.at[mindist_seq, 'Train or Val'])
+    # compare each seqs' prop similarity, Default:False
+    if opt.compareprop:
+        compare_prop()
 
-                if seq_v_dic[mindist_seq] not in used_v_list:
-                    unused_v_list.append(seq_v_dic[mindist_seq])
-
-        print('untrained viruses: ', set(unused_v_list))
+    len_ave = statistics.mean([len(seq) for seq in seq_set_list])
+    print('SYN LENGTH AVERAGE(SET): ', len_ave)
 
 
 if __name__ == '__main__':

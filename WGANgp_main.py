@@ -23,7 +23,7 @@ np.set_printoptions(threshold=sys.maxsize)
 start = time.time()
 
 parser = argparse.ArgumentParser()
-parser.add_argument("--epoch", type=int, default=75,
+parser.add_argument("--epoch", type=int, default=100,
                     help="number of epochs of training")
 parser.add_argument("--hidden", type=int, default=512,
                     help="number of neurons in hidden layer")
@@ -59,7 +59,7 @@ parser.add_argument("--motif",  action='store_true',
                     help="choose whether or not you want to include motif restriction. Default:False, place --motif if you want it to be True.")
 parser.add_argument("--ut", type=str, default="P-PS",
                     help="Choose data update type: P-PS, PR-PS, R-S (start-end, R:Random, P:Positive, S:Synthetic)")
-parser.add_argument("--fe", type=float, default=0.75,
+parser.add_argument("--fe", type=float, default=0,
                     help="percentage of epochs to feedback. e.g: if fe:0.2 and epoch:100, first 80 epochs feedforward and last 20 epochs feedback")
 parser.add_argument("--fp", type=float, default=0.5,
                     help="proportion of positive seqs to feedback. e.g: if fp:0.2 and are 100 positive seqs, 20 of them are picked randomly from the positive seqs and are feedbacked, the rest (80) are picked randomly from non-positive seqs")
@@ -78,16 +78,8 @@ optimizer = opt.optimizer
 if opt.fe == 0.0:
     opt.fp = opt.mp = "-"
 
-# run_name_dir = "ut" + ut + "_" + "fe" + \
-#     str(opt.fe) + "_" + "fp" + \
-#     str(opt.fp) + "_" + "mp" + str(opt.mp) + \
-#     "_" + "rev" + str(opt.rev) + "/"
+run_name_dir = "fe" + str(opt.fe) + "/"
 
-run_name_dir = "_ep" + str(opt.epoch) + "_" + "ba" + str(opt.batch) + "_" + "lr" + \
-    str(opt.lr) + "_" + "pc" + str(opt.preds_cutoff) + \
-    "_" + "opt" + str(opt.optimizer) + "_" + "itr" + str(opt.sample_itr) + '/'
-
-# + "_" + "gen" + generator_model + "_" + "dis" + discriminator_model + "/"  # kari
 
 figure_dir = opt.figure_dir
 if not os.path.exists(figure_dir + run_name_dir):
@@ -154,9 +146,10 @@ def train_model():
         g_fake_data_all = []
         # nofb = True
 
-        if epoch >= fbepoch:  # if you're using FeedBack
-            # sample_itr = math.floor(len(label_nparr)/opt.batch)  # kari
-            print('!!!!!!!!!!', math.floor(len(label_nparr)/opt.batch))
+        # if you're using FeedBack
+        if epoch >= fbepoch and (opt.fe != 0 or opt.fe != 0.0):
+            print('!!!!!!!!!!', epoch, fbepoch)
+            # math.floor(len(label_nparr)/opt.batch): 7
             sampled_seqs = generate_sample(
                 opt.sample_itr, opt.batch, max_len, amino_num, G, a_list, motif_list)
             # add certain amount of mutation to fight mode collapse
@@ -197,7 +190,7 @@ def train_model():
             dataloader = torch.utils.data.DataLoader(
                 dataset, batch_size=opt.batch, shuffle=False, drop_last=True)
 
-        for i, (data, _) in enumerate(dataloader):
+        for i, (data, _) in enumerate(dataloader):  # i: 0-6
             real_data = Variable(data.type(Tensor))
             D.zero_grad()
 
@@ -279,6 +272,14 @@ def train_model():
     print('Process time: ', process_time, 'sec')
     with open(figure_dir + run_name_dir+'time.txt', 'w') as f:
         f.write(' '.join([str(process_time), 'sec']))
+    with open(figure_dir + run_name_dir+'dist.txt', 'w') as f:
+        for d in W_dist:
+            f.write(str(d))
+            f.write('\n')
+    with open(figure_dir + run_name_dir+'pos_num.txt', 'w') as f:
+        for p in pos_num:
+            f.write(str(p))
+            f.write('\n')
 
 
 def prepare_model(in_dim, max_len, amino_num):
