@@ -6,14 +6,6 @@ from FunctionAnalyser import TransClassifier
 from implementations.data_utils import load_data_esm, to_dataloader
 from esm_main.initialize_esm import gen_repr
 
-input_path = './data_fbgan/input/'
-output_path = './data_fbgan/output/'
-
-if not os.path.exists(input_path):
-    os.makedirs(input_path)
-if not os.path.exists(output_path):
-    os.makedirs(output_path)
-
 
 def prepare_FA(fbtype, in_dim, out_dim, hidden, batch):
     if fbtype == "Transformer":
@@ -46,6 +38,11 @@ def meta_select_pos(sampled_seqs, epoch, preds_cutoff):
 
 
 def make_input_file(sampled_seqs, epoch):
+    input_path = './data_fbgan/input/'
+
+    if not os.path.exists(input_path):
+        os.makedirs(input_path)
+
     fasta_seqs = [('>'+str(i)+'\n'+seq+'\n')
                   for (i, seq) in enumerate(sampled_seqs)]
     joint_fasta_seqs = ''.join(fasta_seqs)
@@ -55,6 +52,9 @@ def make_input_file(sampled_seqs, epoch):
 
 
 def make_pred(epoch):
+    output_path = './data_fbgan/output/'
+    if not os.path.exists(output_path):
+        os.makedirs(output_path)
     while True:
         if os.path.exists(output_path+'output_'+str(epoch)+'.txt'):
             break

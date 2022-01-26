@@ -102,7 +102,6 @@ def train_model():
     torch.manual_seed(1)  # seed固定、ネットワーク定義前にする必要ありそう
 
     if classifier_model == "Dis_Lin_classify":
-        print(in_dim, out_dim, opt.hidden)
         model = Dis_Lin_classify(in_dim, out_dim, opt.hidden)
 
     if optimizer == "SGD":

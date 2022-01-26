@@ -59,7 +59,7 @@ parser.add_argument("--motif",  action='store_true',
                     help="choose whether or not you want to include motif restriction. Default:False, place --motif if you want it to be True.")
 parser.add_argument("--ut", type=str, default="P-PS",
                     help="Choose data update type: P-PS, PR-PS, R-S (start-end, R:Random, P:Positive, S:Synthetic)")
-parser.add_argument("--fe", type=float, default=0,
+parser.add_argument("--fe", type=float, default=0.75,
                     help="percentage of epochs to feedback. e.g: if fe:0.2 and epoch:100, first 80 epochs feedforward and last 20 epochs feedback")
 parser.add_argument("--fp", type=float, default=0.5,
                     help="proportion of positive seqs to feedback. e.g: if fp:0.2 and are 100 positive seqs, 20 of them are picked randomly from the positive seqs and are feedbacked, the rest (80) are picked randomly from non-positive seqs")
@@ -78,7 +78,11 @@ optimizer = opt.optimizer
 if opt.fe == 0.0:
     opt.fp = opt.mp = "-"
 
-run_name_dir = "fe" + str(opt.fe) + "/"
+run_name_dir = "ep" + str(opt.epoch)+"_"+"ut" + \
+    str(opt.ut)+"_"+"fe" + str(opt.fe) + "/"
+
+if opt.fe == 0.0:
+    opt.epoch = opt.epoch+1
 
 
 figure_dir = opt.figure_dir
@@ -148,7 +152,6 @@ def train_model():
 
         # if you're using FeedBack
         if epoch >= fbepoch and (opt.fe != 0 or opt.fe != 0.0):
-            print('!!!!!!!!!!', epoch, fbepoch)
             # math.floor(len(label_nparr)/opt.batch): 7
             sampled_seqs = generate_sample(
                 opt.sample_itr, opt.batch, max_len, amino_num, G, a_list, motif_list)

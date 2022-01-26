@@ -9,9 +9,9 @@ import torchvision.transforms as transforms
 
 
 # opt_name = input('Option name: ')
-opt_name = "posscreen_negexpnoexp"
-
-data_dir = "./real_data_"+opt_name+"/"
+# opt_name = "posscreen_negexpnoexp"
+# data_dir = "./real_data_"+opt_name+"/"
+data_dir = "./real_data/"
 binary_negative_data_file = "negative.txt"
 binary_negative_val_data_file = "val_negative.txt"
 binary_positive_data_file = "positive.txt"

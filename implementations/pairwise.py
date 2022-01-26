@@ -37,14 +37,10 @@ def calc_best_alignment(synseq, realseq_list):
     return max_score, sim_seq, best_alignment
 
 
-def out_result(seq_list, train_path, val_path, align_path):
+def out_result(seq_list, train_seq_v_dic, val_seq_v_dic, align_path):
     '''
     make pairwise alignment with real data
     '''
-    train_df = pd.read_csv(train_path, sep="\t")
-    val_df = pd.read_csv(val_path, sep="\t")
-    train_seq_v_dic = dict(zip(train_df['Sequence'], train_df['Virus']))
-    val_seq_v_dic = dict(zip(val_df['Sequence'], val_df['Virus']))
     realseq_list = list(train_seq_v_dic.keys())
     realseq_list += list(val_seq_v_dic.keys())
 
@@ -91,10 +87,9 @@ def analyse_result(result_df, analyse_path):
             f.write('\n')
 
 
-def pairwise_main(input_dir, real_train_path, real_val_path, out_path, analyse_path):
+def pairwise_main(input_dir, train_seq_v_dic, val_seq_v_dic, out_path, analyse_path):
     seq_list = make_seq_list(input_dir)
-    result_df = out_result(seq_list, real_train_path,
-                           real_val_path, out_path)
+    result_df = out_result(seq_list, train_seq_v_dic, val_seq_v_dic, out_path)
     analyse_result(result_df, analyse_path)
     result_df = result_df.astype(str)
     return result_df

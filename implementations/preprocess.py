@@ -59,8 +59,8 @@ if opt.selectv:
 if opt.noexp:
     neg_opt = "negnoexp"
 
-real_data_dir = "./"+"_".join(["real_data", pos_opt, neg_opt]) + "/"
-real_fasta_dir = "./"+"_".join(["real_data_fasta", pos_opt, neg_opt]) + "/"
+real_data_dir = "./real_data/"
+real_fasta_dir = "./real_data_fasta/"
 if not os.path.exists(real_data_dir):
     os.mkdir(real_data_dir)
 if not os.path.exists(real_fasta_dir):
